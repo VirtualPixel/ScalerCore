@@ -243,15 +243,17 @@ namespace ScalerCore.Handlers
                         pupilMult = Mathf.Lerp(3f, 1f, expressionFraction);
                     }
                 }
-                // Timer must be long enough (1s) that the RPC-synced override doesn't expire
-                // between our per-frame refreshes. At 0.1s the timer expired every ~6 frames,
-                // sending deactivation RPCs that made remote clients see normal pupils.
-                state.PlayerAvatar.OverridePupilSize(pupilMult, 10, 20f, 0.5f, 5f, 0.5f, 1f);
-                state.PlayerAvatar.OverrideAnimationSpeed(ShrinkConfig.ShrunkAnimSpeedMult, 5f, 5f, 1f);
+                // Use 9999s timer so the RPC-synced override persists on remote clients
+                // for the entire duration of being shrunken. The game only sends the RPC
+                // when the value changes or overridePupilSizeActive flips, so a short timer
+                // caused remotes to deactivate without the host re-sending.
+                // OnRestore calls OverridePitchCancel which also stops the pupil override.
+                state.PlayerAvatar.OverridePupilSize(pupilMult, 10, 20f, 0.5f, 5f, 0.5f, 9999f);
+                state.PlayerAvatar.OverrideAnimationSpeed(ShrinkConfig.ShrunkAnimSpeedMult, 5f, 5f, 9999f);
 
                 // Apply big pupils to the pause menu avatar preview too.
                 if (state.MenuPlayerAvatar != null)
-                    state.MenuPlayerAvatar.OverridePupilSize(pupilMult, 10, 20f, 0.5f, 5f, 0.5f, 1f);
+                    state.MenuPlayerAvatar.OverridePupilSize(pupilMult, 10, 20f, 0.5f, 5f, 0.5f, 9999f);
                 else if (state.MenuExpression != null && _expressionsField != null)
                 {
                     // Fallback: set expression weight to force big pupils via PlayerExpression.
