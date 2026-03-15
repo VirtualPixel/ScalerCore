@@ -13,8 +13,6 @@ namespace ScalerCore
         void Awake()
         {
             Log = Logger;
-            ShrinkConfig.Init(Config);
-
             _harmony = new Harmony("Vippy.ScalerCore");
             _harmony.PatchAll();
         }

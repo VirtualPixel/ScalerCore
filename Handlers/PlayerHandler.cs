@@ -227,29 +227,25 @@ namespace ScalerCore.Handlers
                     state.MenuAvatarTransform.localScale = state.MenuAvatarOriginalScale;
             }
 
-            // Per-frame pupil and animation overrides for shrunken players (all clients).
-            // Done in LateUpdate so we override the game's eye-tracking/gaze system that
-            // sets pupil size during Update, which was overwriting our enlarged pupils.
+            // Per-frame pupil and animation overrides for shrunken players.
+            // OverridePupilSizeActivate only sends the RPC when called on the LOCAL
+            // player (isLocal check at line 703 of PlayerAvatar). For remote players,
+            // the game's own OverridePupilSizeLogic per-frame refresh handles it
+            // once overridePupilSizeActive is set via the initial RPC.
+            // Done in LateUpdate to override the game's gaze system from Update.
+            bool isLocal = state.PlayerAvatar.isLocal;
             if (ctrl.IsScaled)
             {
                 float pupilMult = 3f;
-                if (state.PlayerExpression != null && _expressionsField != null)
+
+                if (isLocal)
                 {
-                    var expList = _expressionsField.GetValue(state.PlayerExpression)
-                                      as List<ExpressionSettings>;
-                    if (expList != null && expList.Count > 0)
-                    {
-                        float expressionFraction = 1f - Mathf.Clamp01(expList[0].weight / 100f);
-                        pupilMult = Mathf.Lerp(3f, 1f, expressionFraction);
-                    }
+                    // Local player: call OverridePupilSize which sends the activation RPC.
+                    // 9999s timer so it never expires while shrunken. Game's per-frame
+                    // OverridePupilSizeLogic on remotes keeps refreshing from the RPC state.
+                    state.PlayerAvatar.OverridePupilSize(pupilMult, 10, 20f, 0.5f, 5f, 0.5f, 9999f);
+                    state.PlayerAvatar.OverrideAnimationSpeed(ShrinkConfig.ShrunkAnimSpeedMult, 5f, 5f, 9999f);
                 }
-                // Use 9999s timer so the RPC-synced override persists on remote clients
-                // for the entire duration of being shrunken. The game only sends the RPC
-                // when the value changes or overridePupilSizeActive flips, so a short timer
-                // caused remotes to deactivate without the host re-sending.
-                // OnRestore calls OverridePitchCancel which also stops the pupil override.
-                state.PlayerAvatar.OverridePupilSize(pupilMult, 10, 20f, 0.5f, 5f, 0.5f, 9999f);
-                state.PlayerAvatar.OverrideAnimationSpeed(ShrinkConfig.ShrunkAnimSpeedMult, 5f, 5f, 9999f);
 
                 // Apply big pupils to the pause menu avatar preview too.
                 if (state.MenuPlayerAvatar != null)
