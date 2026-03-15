@@ -1,0 +1,10 @@
+{
+    "name": "ScalerCore",
+    "version_number": "0.1.0",
+    "website_url": "https://github.com/VirtualPixel/ScalerCore",
+    "description": "Scaling library for REPO mods. Physics, audio, NavMesh, animation, and multiplayer sync for shrink/grow mods. Required by ShrinkerGun.",
+    "dependencies": [
+        "BepInEx-BepInExPack-5.4.2304",
+        "Zehs-REPOLib-3.0.3"
+    ]
+}
