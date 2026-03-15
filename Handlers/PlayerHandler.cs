@@ -187,21 +187,8 @@ namespace ScalerCore.Handlers
                 }
             }
 
-            // F9: debug self-shrink for local player.
-            if (!ctrl.IsScaled && Input.GetKeyDown(KeyCode.F9))
-            {
-                bool isLocal = !PhotonNetwork.InRoom || (ctrl._networkPV != null && ctrl._networkPV.IsMine);
-                if (isLocal)
-                    ctrl.RequestManualShrink();
-            }
-
-            // F10: manual unshrink for local player.
-            if (ctrl.IsScaled && Input.GetKeyDown(KeyCode.F10))
-            {
-                bool isLocal = !PhotonNetwork.InRoom || (ctrl._networkPV != null && ctrl._networkPV.IsMine);
-                if (isLocal)
-                    ctrl.RequestManualExpand();
-            }
+            // F9/F10 debug keys are handled in ScaleController.Update
+            // so they work even when not scaled (F9 needs !IsScaled).
         }
 
         /// <summary>

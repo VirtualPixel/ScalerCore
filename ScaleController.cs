@@ -164,9 +164,22 @@ namespace ScalerCore
                     Handler.OnUpdate(this);
             }
 
-            // Player handler runs on all clients (grab stats, voice pitch, debug keys).
-            if (!isHost && Handler is PlayerHandler)
+            // Player handler runs on all clients (grab stats, voice pitch, etc.).
+            if (!isHost && IsScaled && Handler is PlayerHandler)
                 Handler.OnUpdate(this);
+
+            // F9/F10 debug keys — must run even when not scaled, for local player only.
+            if (Handler is PlayerHandler)
+            {
+                bool isLocal = !PhotonNetwork.InRoom || (_networkPV != null && _networkPV.IsMine);
+                if (isLocal)
+                {
+                    if (!IsScaled && Input.GetKeyDown(KeyCode.F9))
+                        RequestManualShrink();
+                    if (IsScaled && Input.GetKeyDown(KeyCode.F10))
+                        RequestManualExpand();
+                }
+            }
 
             // Periodic status log while shrunken (once per second, host only).
             // Running string formatting + log writes on every non-host client for every
