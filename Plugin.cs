@@ -4,7 +4,7 @@ using HarmonyLib;
 
 namespace ScalerCore
 {
-    [BepInPlugin("Vippy.ScalerCore", "ScalerCore", "0.1.0")]
+    [BepInPlugin("Vippy.ScalerCore", "ScalerCore", BuildInfo.Version)]
     public class Plugin : BaseUnityPlugin
     {
         static Harmony? _harmony;

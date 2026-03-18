@@ -4,9 +4,9 @@ A scaling library for [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO
 
 If you're building a mod that changes the size of things (shrink rays, growth potions, whatever), ScalerCore gives you a clean API and takes care of the edge cases.
 
-**This is a library, not a standalone mod.** End users don't need to interact with it directly. If you're a player, you probably got here because a mod like [ShrinkerGun: COMPRESSOR](https://github.com/Vippy/ShrinkerGun-COMPRESSOR) depends on it.
+**This is a library, not a standalone mod.** End users don't need to interact with it directly. If you're a player, you probably got here because a mod like [ShrinkerGun: COMPRESSOR](https://thunderstore.io/c/repo/p/Vippy/ShrinkerGun/) depends on it.
 
-> **v0.1.0 -- Early Access.** The API surface is small and may change. Pin your dependency version.
+> **v0.2.0 -- Early Access.** The API surface is small and may change. Pin your dependency version.
 
 ## Installation
 
@@ -156,7 +156,7 @@ All values are configurable via BepInEx config (`ScalerCore.cfg`). These are the
 | `EnemyDamageMultiplier` | `0.1` | Damage dealt by shrunken enemies (10% of normal) |
 | `EnemyShrinkDuration` | `120` | Seconds until enemy auto-restores (0 = never) |
 | `ValuableShrinkDuration` | `0` | Seconds until valuable auto-restores (0 = never) |
-| `ItemShrinkDuration` | `300` | Seconds until item auto-restores (0 = never) |
+| `ItemShrinkDuration` | `0` | Seconds until item auto-restores (0 = never) |
 | `PlayerShrinkDuration` | `0` | Seconds until player auto-restores (0 = never) |
 | `EnemyBonkImmuneDuration` | `5` | Grace period after shrinking before damage can restore |
 | `ValuableBonkImmuneDuration` | `5` | Grace period for valuables |
@@ -210,10 +210,10 @@ For all types:
 
 ## Known Issues
 
-- Player pupil size override may not consistently sync to other players in multiplayer
 - Not all enemy types have been tested -- some may float or clip into the ground while shrunken
 - Grab strength/range values are still being tuned for the best feel
-- Early access 0.1.0 -- API may evolve, pin your dependency version
+- Non-host grab strength may not scale correctly in multiplayer (physics runs on host)
+- Early access 0.2.0 -- API may evolve, pin your dependency version
 
 ## Dependencies
 

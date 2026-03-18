@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Reflection;
-using HarmonyLib;
 using Photon.Pun;
 using UnityEngine;
 
@@ -13,13 +10,14 @@ namespace ScalerCore.Handlers
     /// </summary>
     internal class PlayerHandler : IScaleHandler
     {
-        // Reflection fields — used only by PlayerHandler methods.
-        internal static readonly FieldInfo? _menuAvatarField =
-            AccessTools.Field(typeof(PlayerAvatar), "playerAvatarMenu");
-        internal static readonly FieldInfo? _expressionsField =
-            AccessTools.Field(typeof(PlayerExpression), "expressions");
-        internal static readonly FieldInfo? _grabMinDistOrigField =
-            AccessTools.Field(typeof(PhysGrabber), "minDistanceFromPlayerOriginal");
+  
+        // Pupil override constants
+        public const float Multiplier = 3f;
+        public const int Priority = 10;
+        public const float SpringSpeedIn = 20f;
+        public const float SpringDampIn = 0.5f;
+        public const float SpringSpeedOut = 5f;
+        public const float SpringDampOut = 0.5f;
 
         /// <summary>
         /// Holds all player-specific component references and saved originals.
@@ -64,9 +62,10 @@ namespace ScalerCore.Handlers
             internal Vector3 MenuAvatarOriginalScale;
             internal PlayerAvatar? MenuPlayerAvatar;
             internal PlayerExpression? MenuExpression;
+            internal PlayerEyes? MenuEyes;
         }
 
-        /// <summary>
+                /// <summary>
         /// Find PlayerAvatar, retarget ScaleTransform to PlayerAvatarVisuals,
         /// attach PlayerShrinkLink, cache PlayerExpression.
         /// </summary>
@@ -157,33 +156,50 @@ namespace ScalerCore.Handlers
         /// </summary>
         public void OnUpdate(ScaleController ctrl)
         {
+            bool isHost = SemiFunc.IsMasterClientOrSingleplayer();
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
 
             if (ctrl.IsScaled)
             {
-                // Per-frame enforcement of grab stats — local player only.
+                var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
+                float f = ShrinkConfig.Factor;
+
+                // Host enforces grab stats for ALL shrunken players (physics runs on host).
+                // Non-host enforces locally via PhysGrabber.instance as a fallback.
                 // PhysGrabber.instance is a singleton; running it for remote players'
                 // ScaleControllers would corrupt the local player's grab strength.
                 bool isLocalPlayer = !PhotonNetwork.InRoom || (ctrl._networkPV != null && ctrl._networkPV.IsMine);
-                if (isLocalPlayer)
-                {
-                    float f = ShrinkConfig.Factor;
-                    if (PhysGrabber.instance != null)
-                    {
-                        var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
-                        PhysGrabber.instance.grabStrength  = baseStr   * f;
-                        PhysGrabber.instance.grabRange     = baseRange;
-                        PhysGrabber.instance.throwStrength = baseThrow * f;
-                    }
-                }
                 // Re-assert voice pitch every frame on ALL clients so other systems
                 // (e.g. hourglass, spewer face-detach) can't permanently replace it.
                 if (state.PlayerAvatar.voiceChat != null)
                 {
                     float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ShrinkConfig.Factor;
                     float pitchMult = 1f + (1f - factor) * 0.5f;
-                    state.PlayerAvatar.voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 0.2f);
+                    state.PlayerAvatar.voiceChat.overridePitchMultiplierTarget = pitchMult;
+                    state.PlayerAvatar.voiceChat.overridePitchTimer = 0.2f;
+                    state.PlayerAvatar.voiceChat.overridePitchIsActive = true;
+                }
+                // Host must enforce strength, range, and throw nerfs across all clients
+                if (isHost)
+                {
+                    var physGrabber = ctrl.GetComponent<PhysGrabber>();
+
+                    if (physGrabber != null)
+                    {
+                        physGrabber.grabStrength = baseStr * f;
+                        physGrabber.grabRange = baseRange * f;
+                        physGrabber.throwStrength = baseThrow * f;
+                    }
+                }
+                else if (isLocalPlayer)
+                {
+                    if (PhysGrabber.instance != null)
+                    {
+                        PhysGrabber.instance.grabStrength = baseStr * f;
+                        PhysGrabber.instance.grabRange = baseRange * f;
+                        PhysGrabber.instance.throwStrength = baseThrow * f;
+                    }
                 }
             }
 
@@ -205,19 +221,18 @@ namespace ScalerCore.Handlers
 
             // Pause menu avatar: scale to match shrunk state so the preview shows mini player.
             // Lazy-cached because PlayerAvatarMenu may not exist at Start time.
-            if (state.MenuAvatarTransform == null && _menuAvatarField != null)
+            if (state.MenuAvatarTransform == null && PlayerAvatarMenu.instance != null)
             {
-                var menuComp = _menuAvatarField.GetValue(state.PlayerAvatar) as MonoBehaviour;
-                if (menuComp != null)
+                state.MenuAvatarTransform = PlayerAvatarMenu.instance.transform;
+                state.MenuAvatarOriginalScale = state.MenuAvatarTransform.localScale;
+                state.MenuPlayerAvatar = state.MenuAvatarTransform.GetComponentInChildren<PlayerAvatar>();
+                if (state.MenuPlayerAvatar == null)
                 {
-                    state.MenuAvatarTransform = menuComp.transform;
-                    state.MenuAvatarOriginalScale = state.MenuAvatarTransform.localScale;
-                    state.MenuPlayerAvatar = state.MenuAvatarTransform.GetComponentInChildren<PlayerAvatar>();
-                    if (state.MenuPlayerAvatar == null)
-                        state.MenuExpression = state.MenuAvatarTransform.GetComponentInChildren<PlayerExpression>();
-                    Plugin.Log.LogInfo($"[SC] MenuAvatar cached  scale={state.MenuAvatarOriginalScale}" +
-                        $"  pupilCtrl={( state.MenuPlayerAvatar != null ? "PlayerAvatar" : state.MenuExpression != null ? "PlayerExpression" : "NONE")}");
+                    state.MenuExpression = state.MenuAvatarTransform.GetComponentInChildren<PlayerExpression>();
+                    state.MenuEyes = state.MenuAvatarTransform.GetComponentInChildren<PlayerEyes>();
                 }
+                Plugin.Log.LogDebug($"[SC] MenuAvatar cached  scale={state.MenuAvatarOriginalScale}" +
+                    $"  pupilCtrl={( state.MenuPlayerAvatar != null ? "PlayerAvatar" : state.MenuExpression != null ? "PlayerExpression" : "NONE")}");
             }
             if (state.MenuAvatarTransform != null)
             {
@@ -236,31 +251,27 @@ namespace ScalerCore.Handlers
             bool isLocal = state.PlayerAvatar.isLocal;
             if (ctrl.IsScaled)
             {
-                float pupilMult = 3f;
-
                 if (isLocal)
                 {
                     // Local player: call OverridePupilSize which sends the activation RPC.
                     // 9999s timer so it never expires while shrunken. Game's per-frame
                     // OverridePupilSizeLogic on remotes keeps refreshing from the RPC state.
-                    state.PlayerAvatar.OverridePupilSize(pupilMult, 10, 20f, 0.5f, 5f, 0.5f, 9999f);
-                    state.PlayerAvatar.OverrideAnimationSpeed(ShrinkConfig.ShrunkAnimSpeedMult, 5f, 5f, 9999f);
+                    state.PlayerAvatar.OverridePupilSize(Multiplier, Priority, SpringSpeedIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 9999f);
+                    state.PlayerAvatar.OverrideAnimationSpeed(ShrinkConfig.ShrunkAnimSpeedMult, SpringSpeedIn, SpringSpeedOut, 9999f);
+                }
+                else
+                {
+                    var eyes = state.PlayerAvatar.playerAvatarVisuals.playerEyes;
+                    if (eyes != null)
+                        eyes.pupilSizeMultiplier = Multiplier;
                 }
 
                 // Apply big pupils to the pause menu avatar preview too.
-                if (state.MenuPlayerAvatar != null)
-                    state.MenuPlayerAvatar.OverridePupilSize(pupilMult, 10, 20f, 0.5f, 5f, 0.5f, 9999f);
-                else if (state.MenuExpression != null && _expressionsField != null)
-                {
-                    // Fallback: set expression weight to force big pupils via PlayerExpression.
-                    // PlayerExpression controls expressions; idle expression at weight 100 = no
-                    // expression active, so pupils should be at our overridden size.
-                    var expList = _expressionsField.GetValue(state.MenuExpression)
-                                      as List<ExpressionSettings>;
-                    if (expList != null && expList.Count > 0)
-                        expList[0].weight = 100f; // force idle expression so pupils stay big
-                }
+                if (state.MenuEyes != null)
+                    state.MenuEyes.pupilSizeMultiplier = Multiplier;
             }
+            else if (state.MenuEyes != null && state.MenuEyes.pupilSizeMultiplier > 1f)
+                state.MenuEyes.pupilSizeMultiplier = 1f;
         }
 
         public void OnDestroy(ScaleController ctrl)
@@ -316,12 +327,12 @@ namespace ScalerCore.Handlers
                 state.OriginalGrabMinDist  = PhysGrabber.instance.minDistanceFromPlayer;
                 state.OriginalGrabMaxDist  = PhysGrabber.instance.maxDistanceFromPlayer;
                 PhysGrabber.instance.grabStrength          = baseStr   * f;
-                PhysGrabber.instance.grabRange             = baseRange;
+                PhysGrabber.instance.grabRange             = baseRange * f;
                 PhysGrabber.instance.throwStrength         = baseThrow * f;
                 PhysGrabber.instance.minDistanceFromPlayer = state.OriginalGrabMinDist * f;
                 PhysGrabber.instance.maxDistanceFromPlayer = state.OriginalGrabMaxDist * f;
-                _grabMinDistOrigField?.SetValue(PhysGrabber.instance, state.OriginalGrabMinDist * f);
-                Plugin.Log.LogInfo($"[SC] player grab  strength {baseStr:F2}→{PhysGrabber.instance.grabStrength:F2}  range {baseRange:F2}→{PhysGrabber.instance.grabRange:F2}  throw {baseThrow:F2}→{PhysGrabber.instance.throwStrength:F2}  minDist {state.OriginalGrabMinDist:F2}→{PhysGrabber.instance.minDistanceFromPlayer:F2}  maxDist {state.OriginalGrabMaxDist:F2}→{PhysGrabber.instance.maxDistanceFromPlayer:F2}");
+                PhysGrabber.instance.minDistanceFromPlayerOriginal = state.OriginalGrabMinDist * f;
+                Plugin.Log.LogInfo($"[SC] player grab  strength {baseStr:F2}→{PhysGrabber.instance.grabStrength:F2} range {baseRange:F2}→{PhysGrabber.instance.grabRange:F2}  throw {baseThrow:F2}→{PhysGrabber.instance.throwStrength:F2}  minDist {state.OriginalGrabMinDist:F2}→{PhysGrabber.instance.minDistanceFromPlayer:F2}  maxDist {state.OriginalGrabMaxDist:F2}→{PhysGrabber.instance.maxDistanceFromPlayer:F2}");
             }
             else Plugin.Log.LogWarning("[SC] PhysGrabber.instance null — grab range not scaled");
             float speedMult = Mathf.Lerp(1f, f, 0.5f);
@@ -396,9 +407,11 @@ namespace ScalerCore.Handlers
                 PhysGrabber.instance.throwStrength         = baseThrow;
                 PhysGrabber.instance.minDistanceFromPlayer = state.OriginalGrabMinDist;
                 PhysGrabber.instance.maxDistanceFromPlayer = state.OriginalGrabMaxDist;
-                _grabMinDistOrigField?.SetValue(PhysGrabber.instance, state.OriginalGrabMinDist);
+                PhysGrabber.instance.minDistanceFromPlayerOriginal = state.OriginalGrabMinDist;
             }
             PlayerController.instance?.OverrideSpeed(1f, 0.1f);
+            state.PlayerAvatar.OverridePupilSizeActivate(false, 1f, Priority, SpringSpeedIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 0.1f);
+            state.PlayerAvatar.OverrideAnimationSpeed(1f, SpringSpeedIn, SpringSpeedOut);
             if (CameraZoom.Instance != null)
             {
                 CameraZoom.Instance.playerZoomDefault = state.OriginalFOV;
