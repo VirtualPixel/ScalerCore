@@ -142,7 +142,7 @@ All values live in `ScalerCore.cfg` (BepInEx config). Defaults:
 | `EnemyDamageMultiplier` | `0.1` | Damage from shrunken enemies (10% of normal) |
 | `EnemyShrinkDuration` | `120` | Seconds until enemy auto-restores (0 = never) |
 | `ValuableShrinkDuration` | `0` | Seconds until valuable auto-restores (0 = never) |
-| `ItemShrinkDuration` | `300` | Seconds until item auto-restores (0 = never) |
+| `ItemShrinkDuration` | `0` | Seconds until item auto-restores (0 = never) |
 | `PlayerShrinkDuration` | `0` | Seconds until player auto-restores (0 = never) |
 | `EnemyBonkImmuneDuration` | `5` | Grace period before damage can restore enemy |
 | `ValuableBonkImmuneDuration` | `5` | Grace period before impact can restore valuable |

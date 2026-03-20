@@ -19,7 +19,7 @@ namespace ScalerCore
     // Host calls DispatchShrink/DispatchExpand, RPCs to clients.
     public class ScaleController : MonoBehaviourPunCallbacks
     {
-        public static readonly HashSet<ScaleController> Scaled = new();
+        public static readonly HashSet<ScaleController> Scaled = [];
 
         // Set by FootstepPitchPatch Prefix, cleared by Postfix.
         // Sound.Play Postfix reads this to pitch-shift footsteps for shrunken players.
@@ -62,7 +62,6 @@ namespace ScalerCore
         Coroutine? _playerBounceAnim;
         float      _shrinkTimer;
         internal float _bonkImmuneTimer; // prevents the gun's own bullet from immediately restoring the target
-        float      _logTimer;        // throttle periodic status logs to once/second
         internal string _displayName = ""; // enemy parent name or GO name, set in Start
 
         // The PhotonView used for RPCs. For players, this == photonView (same GO).
@@ -135,7 +134,7 @@ namespace ScalerCore
 
             // Log handler-specific info for enemies.
             var enemyState = HandlerState as EnemyHandler.State;
-            Plugin.Log.LogInfo($"[SC] Registered {_displayName} ({kind})" +
+            Plugin.Log.LogDebug($"[SC] Registered {_displayName} ({kind})" +
                 $"  scale={OriginalScale}" +
                 $"  mass={(_rb != null ? _rb.mass.ToString("F2") : "none")}" +
                 $"  animTarget={(enemyState?.AnimTarget != null ? enemyState.AnimTarget.gameObject.name : "NONE")}" +
@@ -167,32 +166,6 @@ namespace ScalerCore
             // Player handler runs on all clients (grab stats, voice pitch, etc.).
             if (!isHost && IsScaled && Handler is PlayerHandler)
                 Handler.OnUpdate(this);
-
-            // Periodic status log while shrunken (once per second, host only).
-            // Running string formatting + log writes on every non-host client for every
-            // shrunken valuable in the cart adds measurable per-frame overhead at scale.
-            if (isHost && (IsScaled || _transitioning))
-            {
-                _logTimer -= Time.deltaTime;
-                if (_logTimer <= 0f)
-                {
-                    _logTimer = 1f;
-                    float sizeRatio    = OriginalScale.x > 0f ? _t.localScale.x / OriginalScale.x : 0f;
-                    float f = ShrinkConfig.Factor;
-                    float expectedMass = IsScaled ? Mathf.Clamp(_originalMass * f, 0.5f, ShrinkConfig.ShrunkMassCap) : _originalMass;
-                    bool  massWrong    = _rb != null && Mathf.Abs(_rb.mass - expectedMass) > 0.001f;
-                    var enemyState = HandlerState as EnemyHandler.State;
-                    Plugin.Log.LogInfo($"[SC] {_displayName}" +
-                        $"  size={sizeRatio * 100f:F0}%" +
-                        $"  scale={_t.localScale}" +
-                        $"  animTargetScale={(enemyState?.AnimTarget != null ? enemyState.AnimTarget.localScale.ToString() : "N/A")}" +
-                        $"  shrinkTimer={(_shrinkTimer > 0f ? _shrinkTimer.ToString("F1") + "s" : "inf")}" +
-                        $"  bonkImmune={Mathf.Max(0f, _bonkImmuneTimer):F2}s" +
-                        $"  mass={(_rb != null ? _rb.mass.ToString("F3") : "N/A")}" +
-                        (massWrong ? $"  *** MASS OVERRIDE (expected {expectedMass:F3}) ***" : "") +
-                        $"  host={isHost}");
-                }
-            }
 
             // Scale animation and force-apply moved to LateUpdate so they always
             // override any game code (PhysGrabObject, ItemEquippable, etc.) that
@@ -276,6 +249,8 @@ namespace ScalerCore
                          : _isItem                     ? ShrinkConfig.ItemShrinkDuration
                          : Handler is PlayerHandler    ? ShrinkConfig.PlayerShrinkDuration
                                                        : ShrinkConfig.ValuableShrinkDuration;
+            if (_shrinkTimer < 0f) _shrinkTimer = 0f;
+
             Scaled.Add(this);
 
             float f = ShrinkConfig.Factor;
@@ -288,7 +263,6 @@ namespace ScalerCore
             float minImmune   = Handler is EnemyHandler ? ShrinkConfig.EnemyBonkImmuneDuration
                                                         : ShrinkConfig.ValuableBonkImmuneDuration;
             _bonkImmuneTimer = Mathf.Max(animTime, minImmune);
-            _logTimer = 0f; // fire status log on next frame
 
             ApplyScale(target);
             SetForceGrabPoint(false);

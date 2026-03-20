@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Reflection;
-using HarmonyLib;
 using UnityEngine;
 
 namespace ScalerCore.Handlers
@@ -31,12 +30,6 @@ namespace ScalerCore.Handlers
         static readonly string[] _soFieldNames = {
             "explosionPreset",
         };
-
-        // Orb radius per-frame enforcement — game recalculates orbRadius each frame.
-        internal static readonly FieldInfo? _orbRadiusField =
-            AccessTools.Field(typeof(ItemOrb), "orbRadius");
-        internal static readonly FieldInfo? _orbRadiusOriginalField =
-            AccessTools.Field(typeof(ItemOrb), "orbRadiusOriginal");
 
         /// <summary>
         /// State for pure items (resolved via registry). Holds ItemOrb ref for per-frame enforcement.
@@ -107,13 +100,13 @@ namespace ScalerCore.Handlers
                 var mbType = mb.GetType();
                 foreach (var soName in _soFieldNames)
                 {
-                    var soFi = AccessTools.Field(mbType, soName);
+                    var soFi = mbType.GetField(soName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     if (soFi == null) continue;
                     var so = soFi.GetValue(mb);
                     if (so != null)
                     {
                         targets.Add(so);
-                        Plugin.Log.LogInfo($"[SC]   following SO ref {mbType.Name}.{soName} -> {so.GetType().Name}");
+                        Plugin.Log.LogDebug($"[SC]   following SO ref {mbType.Name}.{soName} -> {so.GetType().Name}");
                     }
                 }
             }
@@ -123,28 +116,28 @@ namespace ScalerCore.Handlers
                 var type = target.GetType();
                 foreach (var name in _floatFieldsToScale)
                 {
-                    var fi = AccessTools.Field(type, name);
+                    var fi = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     if (fi == null || fi.FieldType != typeof(float)) continue;
                     float orig = (float)fi.GetValue(target);
                     scaledFields.Add(new ScaledField { comp = target, field = fi, original = orig });
                     fi.SetValue(target, orig * f);
-                    Plugin.Log.LogInfo($"[SC]   itemField {type.Name}.{name} {orig:F2} -> {orig * f:F2}");
+                    Plugin.Log.LogDebug($"[SC]   itemField {type.Name}.{name} {orig:F2} -> {orig * f:F2}");
                 }
                 foreach (var name in _intFieldsToScale)
                 {
-                    var fi = AccessTools.Field(type, name);
+                    var fi = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     if (fi == null || fi.FieldType != typeof(int)) continue;
                     int orig = (int)fi.GetValue(target);
                     int scaled = Mathf.RoundToInt(orig * f);
                     scaledFields.Add(new ScaledField { comp = target, field = fi, original = orig });
                     fi.SetValue(target, scaled);
-                    Plugin.Log.LogInfo($"[SC]   itemField {type.Name}.{name} {orig} -> {scaled}");
+                    Plugin.Log.LogDebug($"[SC]   itemField {type.Name}.{name} {orig} -> {scaled}");
                 }
             }
 
             if (scaledFields.Count == 0)
             {
-                Plugin.Log.LogInfo($"[SC]   itemField scan: no scalable fields found on {ctrl.gameObject.name}");
+                Plugin.Log.LogDebug($"[SC]   itemField scan: no scalable fields found on {ctrl.gameObject.name}");
                 return null;
             }
             return scaledFields;
@@ -173,11 +166,7 @@ namespace ScalerCore.Handlers
         /// </summary>
         internal static void OnUpdateOrb(ItemOrb itemOrb)
         {
-            if (_orbRadiusField != null && _orbRadiusOriginalField != null)
-            {
-                float origRadius = (float)_orbRadiusOriginalField.GetValue(itemOrb);
-                _orbRadiusField.SetValue(itemOrb, origRadius * ShrinkConfig.Factor);
-            }
+            itemOrb.orbRadius = itemOrb.orbRadiusOriginal * ShrinkConfig.Factor;
         }
     }
 }

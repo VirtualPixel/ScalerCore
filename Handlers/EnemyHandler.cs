@@ -35,6 +35,9 @@ namespace ScalerCore.Handlers
             internal EnemyBombThrowerHead? BtHead;
             internal Vector3 BtHeadOriginalScale;
 
+            // Rigidbody original local position (for mesh Y compensation)
+            internal Vector3 RbOriginalLocalPos;
+
             // Saved originals
             internal float OriginalDefaultSpeed;
             internal float OriginalAgentRadius;
@@ -47,6 +50,10 @@ namespace ScalerCore.Handlers
 
             // Tracking
             internal bool OriginalsCaptured;
+
+            // Per-enemy visual scaling strategy
+            internal IEnemyVisualHandler? VisualHandler;
+            internal object? VisualState;
         }
 
         /// <summary>
@@ -85,7 +92,9 @@ namespace ScalerCore.Handlers
                 CheckVisualGO(bssa.gameObject);
 
             // Walk up: if parent covers more renderers (sibling meshes), adopt it.
-            // Stop at EnemyParent or if parent has sibling Animator GOs (independent rigs).
+            // Stop at EnemyParent, if parent has sibling Animator GOs (independent rigs),
+            // or if a sibling has EnemyRigidbody (scaling the parent would cascade to the
+            // physics body, causing double-scaling — HeartHugger, Shadow/Loom hit this).
             while (bestVisual != null
                    && bestVisual.parent != null
                    && bestVisual.parent != ep.transform)
@@ -93,14 +102,15 @@ namespace ScalerCore.Handlers
                 int current = bestVisual.GetComponentsInChildren<Renderer>().Length;
                 int parent  = bestVisual.parent.GetComponentsInChildren<Renderer>().Length;
                 if (parent <= current) break;
-                bool hasSiblingAnimator = false;
+                bool stopWalkUp = false;
                 foreach (Transform sib in bestVisual.parent)
                 {
                     if (sib == bestVisual) continue;
                     var a = sib.GetComponent<Animator>();
-                    if (a != null && a.runtimeAnimatorController != null) { hasSiblingAnimator = true; break; }
+                    if (a != null && a.runtimeAnimatorController != null) { stopWalkUp = true; break; }
+                    if (sib.GetComponent<EnemyRigidbody>() != null) { stopWalkUp = true; break; }
                 }
-                if (hasSiblingAnimator) break;
+                if (stopWalkUp) break;
                 bestVisual = bestVisual.parent;
             }
 
@@ -137,6 +147,14 @@ namespace ScalerCore.Handlers
 
             // PhysGrabObject is on the same GO for enemies.
             ctrl._physGrabObject = ctrl.GetComponent<PhysGrabObject>();
+
+            state.RbOriginalLocalPos = ctrl._t.localPosition;
+
+            // Resolve per-enemy visual handler by internal name.
+            string enemyName = EnemyVisualRegistry.ExtractEnemyName(ep);
+            state.VisualHandler = EnemyVisualRegistry.Resolve(enemyName);
+            state.VisualState = state.VisualHandler.Setup(ctrl, state, ep);
+            Plugin.Log.LogInfo($"[SC]   visualHandler={state.VisualHandler.GetType().Name} for '{enemyName}'");
 
             ctrl.HandlerState = state;
         }
@@ -226,6 +244,12 @@ namespace ScalerCore.Handlers
                 state.EnemyRb.rotationSpeedChase = state.OriginalRotSpeedChase;
                 state.EnemyRb.rotationSpeedIdle  = state.OriginalRotSpeedIdle;
             }
+
+            // Visual handler restore — only after the transition animation completes.
+            // During _transitioning, OnLateUpdate still runs and manages the visual.
+            // Calling OnRestore mid-transition would reset localPosition and flicker.
+            if (!ctrl._transitioning)
+                state.VisualHandler?.OnRestore(ctrl, state, state.VisualState);
         }
 
         /// <summary>
@@ -251,35 +275,30 @@ namespace ScalerCore.Handlers
         }
 
         /// <summary>
-        /// AnimTarget ratio scaling + BtHead scaling each LateUpdate.
+        /// Delegate visual scaling to per-enemy visual handler each LateUpdate.
         /// </summary>
         public void OnLateUpdate(ScaleController ctrl)
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
-            if (state.AnimTarget == null || ctrl.OriginalScale.x == 0f) return;
+            if (ctrl.OriginalScale.x == 0f) return;
             if (!ctrl.IsScaled && !ctrl._transitioning) return;
             float ratio = ctrl._t.localScale.x / ctrl.OriginalScale.x;
-            state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
 
-            if (state.BtHead != null)
-                state.BtHead.transform.localScale = state.BtHeadOriginalScale * ratio;
+            if (state.VisualHandler != null)
+                state.VisualHandler.OnLateUpdate(ctrl, state, state.VisualState, ratio);
         }
 
         /// <summary>
-        /// Reset AnimTarget and BtHead scales on destroy.
+        /// Delegate visual restore to per-enemy visual handler on destroy.
         /// </summary>
         public void OnDestroy(ScaleController ctrl)
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
-            if (state.AnimTarget != null)
-            {
-                state.AnimTarget.localScale    = state.AnimOriginalScale;
-                state.AnimTarget.localPosition = state.AnimOriginalLocalPos;
-            }
-            if (state.BtHead != null)
-                state.BtHead.transform.localScale = state.BtHeadOriginalScale;
+
+            if (state.VisualHandler != null)
+                state.VisualHandler.OnRestore(ctrl, state, state.VisualState);
         }
     }
 }
