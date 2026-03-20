@@ -294,6 +294,13 @@ namespace ScalerCore.Handlers
                         // OverridePupilSizeLogic on remotes keeps refreshing from the RPC state.
                         state.PlayerAvatar.OverridePupilSize(Multiplier, Priority, SpringSpeedIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 9999f);
                     }
+                    else
+                    {
+                        // Cancel the big-pupil override so the expression can control pupils
+                        state.PlayerAvatar.overridePupilSizeMultiplier = 1f;
+                        state.PlayerAvatar.overridePupilSizeMultiplierTarget = 1f;
+                        state.PlayerAvatar.overridePupilSizeTimer = 0f;
+                    }
                 }
                 else
                 {
@@ -303,6 +310,13 @@ namespace ScalerCore.Handlers
                         var eyes = state.PlayerAvatar.playerAvatarVisuals.playerEyes;
                         if (eyes != null)
                             eyes.pupilSizeMultiplier = Multiplier;
+                    }
+                    else
+                    {
+                        // Cancel the big-pupil override so the expression can control pupils
+                        state.PlayerAvatar.overridePupilSizeMultiplier = 1f;
+                        state.PlayerAvatar.overridePupilSizeMultiplierTarget = 1f;
+                        state.PlayerAvatar.overridePupilSizeTimer = 0f;
                     }
                 }
 
