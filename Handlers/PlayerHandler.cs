@@ -1,5 +1,6 @@
 using Photon.Pun;
 using UnityEngine;
+using UnityEngine.UIElements.Experimental;
 
 namespace ScalerCore.Handlers
 {
@@ -143,7 +144,19 @@ namespace ScalerCore.Handlers
             if (state == null) return;
 
             if (ctrl._networkPV != null && PhotonNetwork.InRoom)
+            {
+                bool isHost = SemiFunc.IsMasterClientOrSingleplayer();
+                var physGrabber = ctrl.GetComponent<PhysGrabber>();
+                var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
+
                 ctrl._networkPV.RPC("RPC_PlayerPitchCancel", RpcTarget.All);
+                if (physGrabber != null && isHost)
+                {
+                    physGrabber.grabStrength = baseStr;
+                    physGrabber.grabRange = baseRange;
+                    physGrabber.throwStrength = baseThrow;
+                }
+            }
             else
                 state.PlayerAvatar.voiceChat?.OverridePitchCancel();
             bool isLocalPlayer = !PhotonNetwork.InRoom || (ctrl._networkPV != null && ctrl._networkPV.IsMine);
@@ -163,7 +176,12 @@ namespace ScalerCore.Handlers
             if (ctrl.IsScaled)
             {
                 var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
-                float f = ShrinkConfig.Factor;
+                var rawStrength = ShrinkConfig.Factor * 1.5f;
+                var maxStrength = ShrinkConfig.Factor < 1.0f 
+                                    ? 1.0f 
+                                    : ShrinkConfig.MaximumStrength;
+                float rangeFactor = ShrinkConfig.Factor;
+                float strengthFactor = Mathf.Clamp(rawStrength, ShrinkConfig.MinimumStrength, maxStrength);
 
                 // Host enforces grab stats for ALL shrunken players (physics runs on host).
                 // Non-host enforces locally via PhysGrabber.instance as a fallback.
@@ -187,18 +205,18 @@ namespace ScalerCore.Handlers
 
                     if (physGrabber != null)
                     {
-                        physGrabber.grabStrength = baseStr * f;
-                        physGrabber.grabRange = baseRange * f;
-                        physGrabber.throwStrength = baseThrow * f;
+                        physGrabber.grabStrength = baseStr * strengthFactor;
+                        physGrabber.grabRange = baseRange * rangeFactor;
+                        physGrabber.throwStrength = baseThrow * rangeFactor;
                     }
                 }
                 else if (isLocalPlayer)
                 {
                     if (PhysGrabber.instance != null)
                     {
-                        PhysGrabber.instance.grabStrength = baseStr * f;
-                        PhysGrabber.instance.grabRange = baseRange * f;
-                        PhysGrabber.instance.throwStrength = baseThrow * f;
+                        PhysGrabber.instance.grabStrength = baseStr * strengthFactor;
+                        PhysGrabber.instance.grabRange = baseRange * rangeFactor;
+                        PhysGrabber.instance.throwStrength = baseThrow * rangeFactor;
                     }
                 }
             }
@@ -234,11 +252,18 @@ namespace ScalerCore.Handlers
                 Plugin.Log.LogDebug($"[SC] MenuAvatar cached  scale={state.MenuAvatarOriginalScale}" +
                     $"  pupilCtrl={( state.MenuPlayerAvatar != null ? "PlayerAvatar" : state.MenuExpression != null ? "PlayerExpression" : "NONE")}");
             }
-            if (state.MenuAvatarTransform != null)
+            bool isLocal = state.PlayerAvatar.isLocal;
+            Plugin.Log.LogDebug($"[SC] MenuAvatar check  isLocal={isLocal}  IsScaled={ctrl.IsScaled}  menuXform={(state.MenuAvatarTransform != null)}");
+            if (state.MenuAvatarTransform != null && isLocal)
             {
+                var current = state.MenuAvatarTransform.localScale;
+                var target = state.MenuAvatarOriginalScale * ShrinkConfig.Factor;
+                var speed = Time.deltaTime * 10f;
                 if (ctrl.IsScaled)
-                    state.MenuAvatarTransform.localScale = state.MenuAvatarOriginalScale * ShrinkConfig.Factor;
-                else if (state.MenuAvatarTransform.localScale != state.MenuAvatarOriginalScale)
+                    state.MenuAvatarTransform.localScale = Vector3.Lerp(current, target, speed);
+                else if (Vector3.Distance(current, state.MenuAvatarOriginalScale) > 0.001)
+                    state.MenuAvatarTransform.localScale = Vector3.Lerp(current, state.MenuAvatarOriginalScale, speed);
+                else if (current != state.MenuAvatarOriginalScale)
                     state.MenuAvatarTransform.localScale = state.MenuAvatarOriginalScale;
             }
 
@@ -248,7 +273,6 @@ namespace ScalerCore.Handlers
             // the game's own OverridePupilSizeLogic per-frame refresh handles it
             // once overridePupilSizeActive is set via the initial RPC.
             // Done in LateUpdate to override the game's gaze system from Update.
-            bool isLocal = state.PlayerAvatar.isLocal;
             if (ctrl.IsScaled)
             {
                 if (isLocal)
@@ -267,10 +291,10 @@ namespace ScalerCore.Handlers
                 }
 
                 // Apply big pupils to the pause menu avatar preview too.
-                if (state.MenuEyes != null)
+                if (state.MenuEyes != null && isLocal)
                     state.MenuEyes.pupilSizeMultiplier = Multiplier;
             }
-            else if (state.MenuEyes != null && state.MenuEyes.pupilSizeMultiplier > 1f)
+            else if (state.MenuEyes != null && state.MenuEyes.pupilSizeMultiplier > 1f && isLocal)
                 state.MenuEyes.pupilSizeMultiplier = 1f;
         }
 
@@ -324,11 +348,18 @@ namespace ScalerCore.Handlers
             if (PhysGrabber.instance != null)
             {
                 var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
+                var rawStrength = ShrinkConfig.Factor * 1.5f;
+                var maxStrength = ShrinkConfig.Factor < 1.0f
+                                    ? 1.0f
+                                    : ShrinkConfig.MaximumStrength;
+                float rangeFactor = ShrinkConfig.Factor;
+                float strengthFactor = Mathf.Clamp(rawStrength, ShrinkConfig.MinimumStrength, maxStrength);
+
                 state.OriginalGrabMinDist  = PhysGrabber.instance.minDistanceFromPlayer;
                 state.OriginalGrabMaxDist  = PhysGrabber.instance.maxDistanceFromPlayer;
-                PhysGrabber.instance.grabStrength          = baseStr   * f;
-                PhysGrabber.instance.grabRange             = baseRange * f;
-                PhysGrabber.instance.throwStrength         = baseThrow * f;
+                PhysGrabber.instance.grabStrength          = baseStr   * strengthFactor;
+                PhysGrabber.instance.grabRange             = baseRange * rangeFactor;
+                PhysGrabber.instance.throwStrength         = baseThrow * rangeFactor;
                 PhysGrabber.instance.minDistanceFromPlayer = state.OriginalGrabMinDist * f;
                 PhysGrabber.instance.maxDistanceFromPlayer = state.OriginalGrabMaxDist * f;
                 PhysGrabber.instance.minDistanceFromPlayerOriginal = state.OriginalGrabMinDist * f;

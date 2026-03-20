@@ -8,6 +8,8 @@ namespace ScalerCore
     public static class ShrinkConfig
     {
         public static float Factor                    = 0.4f;
+        public static float MinimumStrength           = 0.6f;
+        public static float MaximumStrength           = 2.0f;
         public static float Speed                     = 2.0f;
         public static float EnemyDamageMult           = 0.1f;
         public static float EnemyShrinkDuration       = 120f;

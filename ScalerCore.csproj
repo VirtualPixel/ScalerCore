@@ -37,4 +37,6 @@
 	<Publicize Include="Assembly-CSharp" />
   </ItemGroup>
 
+  <ProjectExtensions><VisualStudio><UserProperties buildzip_4scalercore_4manifest_1json__JsonSchema="https://acp-protocol.dev/schemas/v1/vars.schema.json" /></VisualStudio></ProjectExtensions>
+
 </Project>
