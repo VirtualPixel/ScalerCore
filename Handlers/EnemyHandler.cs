@@ -50,6 +50,10 @@ namespace ScalerCore.Handlers
 
             // Tracking
             internal bool OriginalsCaptured;
+
+            // Per-enemy visual scaling strategy
+            internal IEnemyVisualHandler? VisualHandler;
+            internal object? VisualState;
         }
 
         /// <summary>
@@ -142,6 +146,13 @@ namespace ScalerCore.Handlers
             ctrl._physGrabObject = ctrl.GetComponent<PhysGrabObject>();
 
             state.RbOriginalLocalPos = ctrl._t.localPosition;
+
+            // Resolve per-enemy visual handler by internal name.
+            string enemyName = EnemyVisualRegistry.ExtractEnemyName(ep);
+            state.VisualHandler = EnemyVisualRegistry.Resolve(enemyName);
+            state.VisualState = state.VisualHandler.Setup(ctrl, state, ep);
+            Plugin.Log.LogInfo($"[SC]   visualHandler={state.VisualHandler.GetType().Name} for '{enemyName}'");
+
             ctrl.HandlerState = state;
         }
 
@@ -230,6 +241,9 @@ namespace ScalerCore.Handlers
                 state.EnemyRb.rotationSpeedChase = state.OriginalRotSpeedChase;
                 state.EnemyRb.rotationSpeedIdle  = state.OriginalRotSpeedIdle;
             }
+
+            // Visual handler restore
+            state.VisualHandler?.OnRestore(ctrl, state, state.VisualState);
         }
 
         /// <summary>
@@ -255,7 +269,7 @@ namespace ScalerCore.Handlers
         }
 
         /// <summary>
-        /// AnimTarget ratio scaling + BtHead scaling each LateUpdate.
+        /// Delegate visual scaling to per-enemy visual handler each LateUpdate.
         /// </summary>
         public void OnLateUpdate(ScaleController ctrl)
         {
@@ -265,27 +279,20 @@ namespace ScalerCore.Handlers
             if (!ctrl.IsScaled && !ctrl._transitioning) return;
             float ratio = ctrl._t.localScale.x / ctrl.OriginalScale.x;
 
-            if (state.AnimTarget != null)
-                state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
-
-            if (state.BtHead != null)
-                state.BtHead.transform.localScale = state.BtHeadOriginalScale * ratio;
+            if (state.VisualHandler != null)
+                state.VisualHandler.OnLateUpdate(ctrl, state, state.VisualState, ratio);
         }
 
         /// <summary>
-        /// Reset AnimTarget and BtHead scales on destroy.
+        /// Delegate visual restore to per-enemy visual handler on destroy.
         /// </summary>
         public void OnDestroy(ScaleController ctrl)
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
-            if (state.AnimTarget != null)
-            {
-                state.AnimTarget.localScale    = state.AnimOriginalScale;
-                state.AnimTarget.localPosition = state.AnimOriginalLocalPos;
-            }
-            if (state.BtHead != null)
-                state.BtHead.transform.localScale = state.BtHeadOriginalScale;
+
+            if (state.VisualHandler != null)
+                state.VisualHandler.OnRestore(ctrl, state, state.VisualState);
         }
     }
 }
