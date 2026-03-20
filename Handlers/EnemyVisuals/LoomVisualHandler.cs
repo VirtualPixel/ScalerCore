@@ -48,6 +48,24 @@ namespace ScalerCore.Handlers.EnemyVisuals
 
             Plugin.Log.LogInfo($"[SC]   Loom: wrists found R={loomState.RightWrist != null} L={loomState.LeftWrist != null}");
 
+            // Diagnostic: dump hierarchy from AnimTarget to understand arm bone structure
+            if (state.AnimTarget != null)
+            {
+                Plugin.Log.LogInfo($"[SC]   Loom: AnimTarget='{state.AnimTarget.name}' localPos={state.AnimTarget.localPosition} parent='{state.AnimTarget.parent?.name}'");
+                DumpChildren(state.AnimTarget, 2);
+            }
+            if (loomState.RightWrist != null)
+            {
+                var chain = "";
+                var t = loomState.RightWrist;
+                while (t != null && t != ep.transform)
+                {
+                    chain = $"{t.name}(lp={t.localPosition:F2},ls={t.localScale:F2})" + (chain.Length > 0 ? " → " + chain : "");
+                    t = t.parent;
+                }
+                Plugin.Log.LogInfo($"[SC]   Loom: R wrist chain: {chain}");
+            }
+
             return loomState;
         }
 
@@ -58,14 +76,22 @@ namespace ScalerCore.Handlers.EnemyVisuals
             // Scale the mesh
             state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
 
-            // Re-scale wrist positions. The game set these to full-scale values
-            // in Update; we override them here in LateUpdate.
-            if (visualState is LoomState loom)
+            // NOTE: Wrist localPositions are in their parent bone's space.
+            // Since the parent hierarchy is already scaled by AnimTarget.localScale,
+            // the positions are automatically proportional — no additional scaling needed.
+            // Previous attempt to scale wrist positions caused double-scaling (elbow-to-hand
+            // stretched wrong). The arm detachment issue needs a different approach.
+        }
+
+        static void DumpChildren(Transform t, int maxDepth, int depth = 0)
+        {
+            if (depth >= maxDepth) return;
+            var indent = new string(' ', (depth + 1) * 2);
+            foreach (Transform child in t)
             {
-                if (loom.RightWrist != null)
-                    loom.RightWrist.localPosition = loom.RightWrist.localPosition * ratio;
-                if (loom.LeftWrist != null)
-                    loom.LeftWrist.localPosition = loom.LeftWrist.localPosition * ratio;
+                int renderers = child.GetComponentsInChildren<Renderer>().Length;
+                Plugin.Log.LogInfo($"[SC]   Loom: {indent}{child.name}  localPos={child.localPosition:F2}  localScale={child.localScale:F2}  renderers={renderers}");
+                DumpChildren(child, maxDepth, depth + 1);
             }
         }
 
