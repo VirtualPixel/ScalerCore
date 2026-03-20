@@ -1,6 +1,5 @@
 using Photon.Pun;
 using UnityEngine;
-using UnityEngine.UIElements.Experimental;
 
 namespace ScalerCore.Handlers
 {
@@ -253,7 +252,7 @@ namespace ScalerCore.Handlers
                     $"  pupilCtrl={( state.MenuPlayerAvatar != null ? "PlayerAvatar" : state.MenuExpression != null ? "PlayerExpression" : "NONE")}");
             }
             bool isLocal = state.PlayerAvatar.isLocal;
-            Plugin.Log.LogDebug($"[SC] MenuAvatar check  isLocal={isLocal}  IsScaled={ctrl.IsScaled}  menuXform={(state.MenuAvatarTransform != null)}");
+
             if (state.MenuAvatarTransform != null && isLocal)
             {
                 var current = state.MenuAvatarTransform.localScale;
@@ -273,26 +272,37 @@ namespace ScalerCore.Handlers
             // the game's own OverridePupilSizeLogic per-frame refresh handles it
             // once overridePupilSizeActive is set via the initial RPC.
             // Done in LateUpdate to override the game's gaze system from Update.
+            bool expressing = state.PlayerExpression != null && state.PlayerExpression.isExpressing;
+
             if (ctrl.IsScaled)
             {
                 if (isLocal)
                 {
-                    // Local player: call OverridePupilSize which sends the activation RPC.
-                    // 9999s timer so it never expires while shrunken. Game's per-frame
-                    // OverridePupilSizeLogic on remotes keeps refreshing from the RPC state.
-                    state.PlayerAvatar.OverridePupilSize(Multiplier, Priority, SpringSpeedIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 9999f);
+                    // Animation speed always applies while shrunken, regardless of expression.
                     state.PlayerAvatar.OverrideAnimationSpeed(ShrinkConfig.ShrunkAnimSpeedMult, SpringSpeedIn, SpringSpeedOut, 9999f);
+
+                    if (!expressing)
+                    {
+                        // Local player: call OverridePupilSize which sends the activation RPC.
+                        // 9999s timer so it never expires while shrunken. Game's per-frame
+                        // OverridePupilSizeLogic on remotes keeps refreshing from the RPC state.
+                        state.PlayerAvatar.OverridePupilSize(Multiplier, Priority, SpringSpeedIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 9999f);
+                    }
                 }
                 else
                 {
-                    var eyes = state.PlayerAvatar.playerAvatarVisuals.playerEyes;
-                    if (eyes != null)
-                        eyes.pupilSizeMultiplier = Multiplier;
+                    // Remote players: force big pupils unless expressing.
+                    if (!expressing)
+                    {
+                        var eyes = state.PlayerAvatar.playerAvatarVisuals.playerEyes;
+                        if (eyes != null)
+                            eyes.pupilSizeMultiplier = Multiplier;
+                    }
                 }
 
-                // Apply big pupils to the pause menu avatar preview too.
+                // Apply big pupils to the pause menu avatar preview too (only when not expressing).
                 if (state.MenuEyes != null && isLocal)
-                    state.MenuEyes.pupilSizeMultiplier = Multiplier;
+                    state.MenuEyes.pupilSizeMultiplier = expressing ? 1f : Multiplier;
             }
             else if (state.MenuEyes != null && state.MenuEyes.pupilSizeMultiplier > 1f && isLocal)
                 state.MenuEyes.pupilSizeMultiplier = 1f;
