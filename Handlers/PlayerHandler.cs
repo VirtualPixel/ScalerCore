@@ -74,8 +74,10 @@ namespace ScalerCore.Handlers
             var pa = ctrl.GetComponent<PlayerAvatar>();
             if (pa == null) return;
 
-            var state = new State();
-            state.PlayerAvatar = pa;
+            var state = new State
+            {
+                PlayerAvatar = pa
+            };
 
             // For players, the visible mesh lives on PlayerAvatarVisuals GO — a completely
             // separate transform from PlayerAvatar GO. PlayerAvatarVisuals manually copies

@@ -11,12 +11,12 @@ namespace ScalerCore
         public static float MinimumStrength           = 0.6f;
         public static float MaximumStrength           = 2.0f;
         public static float Speed                     = 2.0f;
-        public static float EnemyDamageMult           = 0.1f;
+        public static float EnemyDamageMult           = Factor;
         public static float EnemyShrinkDuration       = 120f;
         public static float ValuableShrinkDuration    = 0f;
         public static float ItemShrinkDuration        = 0f;
         public static float PlayerShrinkDuration      = 0f;
-        public static float EnemyBonkImmuneDuration   = 5f;
+        public static float EnemyBonkImmuneDuration   = 3f;
         public static float ValuableBonkImmuneDuration = 5f;
         public static float ShrunkMassCap             = 5.0f;
         public static float EnemyShrinkSpeedFactor    = 0.65f;

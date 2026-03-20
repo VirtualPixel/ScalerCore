@@ -19,7 +19,7 @@ namespace ScalerCore
     // Host calls DispatchShrink/DispatchExpand, RPCs to clients.
     public class ScaleController : MonoBehaviourPunCallbacks
     {
-        public static readonly HashSet<ScaleController> Scaled = new();
+        public static readonly HashSet<ScaleController> Scaled = [];
 
         // Set by FootstepPitchPatch Prefix, cleared by Postfix.
         // Sound.Play Postfix reads this to pitch-shift footsteps for shrunken players.
@@ -62,7 +62,6 @@ namespace ScalerCore
         Coroutine? _playerBounceAnim;
         float      _shrinkTimer;
         internal float _bonkImmuneTimer; // prevents the gun's own bullet from immediately restoring the target
-        float      _logTimer;        // throttle periodic status logs to once/second
         internal string _displayName = ""; // enemy parent name or GO name, set in Start
 
         // The PhotonView used for RPCs. For players, this == photonView (same GO).
@@ -264,7 +263,6 @@ namespace ScalerCore
             float minImmune   = Handler is EnemyHandler ? ShrinkConfig.EnemyBonkImmuneDuration
                                                         : ShrinkConfig.ValuableBonkImmuneDuration;
             _bonkImmuneTimer = Mathf.Max(animTime, minImmune);
-            _logTimer = 0f; // fire status log on next frame
 
             ApplyScale(target);
             SetForceGrabPoint(false);

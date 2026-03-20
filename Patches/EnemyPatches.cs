@@ -1,7 +1,8 @@
+#pragma warning disable Harmony003
 using HarmonyLib;
 using UnityEngine;
 
-namespace ScalerCore
+namespace ScalerCore.Patches
 {
     internal static class EnemyPatchHelpers
     {
@@ -50,7 +51,7 @@ namespace ScalerCore
             float dist = Vector3.Distance(__instance.feetTransform.position, player.transform.position);
             if (dist <= ShrinkConfig.Factor * 4f) return;
 
-            __instance.enemy.NavMeshAgent.SetDestination(player.transform.position);
+            __instance.enemy?.NavMeshAgent.SetDestination(player.transform.position);
         }
     }
 
