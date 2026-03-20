@@ -22,6 +22,10 @@
 - Replaced AccessTools field scanning in ItemHandler with silent GetField lookups
 - Updated Thunderstore link in README
 - Updated description for better discoverability
+- Fixed big pupils overriding expressions while shrunken
+- Fixed cart pull distance being affected by host's shrink state for all players
+- Removed unused REPOLib dependency
+- Cleaned up duplicated grab strength calculation
 
 ## 0.1.0
 

@@ -1,8 +1,10 @@
 using HarmonyLib;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
+using UnityEngine.SocialPlatforms;
 
 namespace ScalerCore
 {
@@ -56,7 +58,7 @@ namespace ScalerCore
     [HarmonyPatch(typeof(PhysGrabCart), "CartSteer")]
     internal static class CartHandledDistancePatch
     {
-        static float ScalePullDist(float d, PhysGrabCart cart)
+        static float ScalePullDist(float d, PhysGrabCart cart, PhysGrabber grabber)
         {
             // Shrunken cart being pushed by a full-size player.
             var cartCtrl = cart.GetComponent<ScaleController>();
@@ -66,26 +68,44 @@ namespace ScalerCore
             // Full-size cart being pushed by a shrunken player.
             // Check the ACTUAL grabbing players, not PhysGrabber.instance (which is
             // the host's grabber and would apply the host's shrink state to everyone).
-            var pgo = cart.GetComponent<PhysGrabObject>();
-            if (pgo != null)
-            {
-                foreach (var grabber in pgo.playerGrabbing)
-                {
-                    if (grabber?.playerAvatar == null) continue;
-                    var ctrl = grabber.playerAvatar.GetComponent<ScaleController>();
-                    if (ctrl != null && ctrl.IsScaled)
-                        return d * Mathf.Lerp(1f, ShrinkConfig.Factor, 0.15f);
-                }
-            }
+
+            if (grabber == null) return d;
+            var ctrl = grabber.playerAvatar.GetComponent<ScaleController>();
+            if (ctrl != null && ctrl.IsScaled)
+                return d * Mathf.Lerp(1f, ShrinkConfig.Factor, 0.15f);
 
             return d;
         }
 
-        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod)
         {
             var lerpMethod = AccessTools.Method(typeof(Mathf), nameof(Mathf.Lerp),
                 new[] { typeof(float), typeof(float), typeof(float) });
             var scaleMethod = AccessTools.Method(typeof(CartHandledDistancePatch), nameof(ScalePullDist));
+
+            var locals = originalMethod.GetMethodBody().LocalVariables;
+            int grabberIndex = -1;
+            int found = 0;
+            foreach (var local in locals)
+            {
+                if (local.LocalType == typeof(PhysGrabber))
+                { 
+                    found++;
+                    if (found == 2)
+                    {
+                        grabberIndex = local.LocalIndex;
+                        break;
+                    }
+                }
+            }
+
+            if (grabberIndex == -1)
+            {
+                Plugin.Log.LogWarning("[SC] CartSteer transpiler: Physgrabber local not found");
+                foreach (var code in instructions)
+                    yield return code;
+                yield break;
+            }
 
             foreach (var code in instructions)
             {
@@ -93,6 +113,7 @@ namespace ScalerCore
                 if (code.opcode == OpCodes.Call && (MethodInfo)code.operand == lerpMethod)
                 {
                     yield return new CodeInstruction(OpCodes.Ldarg_0);
+                    yield return new CodeInstruction(OpCodes.Ldloc, grabberIndex);
                     yield return new CodeInstruction(OpCodes.Call, scaleMethod);
                 }
             }

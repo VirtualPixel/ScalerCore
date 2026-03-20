@@ -11,6 +11,15 @@ namespace ScalerCore.Handlers
     internal class PlayerHandler : IScaleHandler
     {
   
+        /// <summary>Returns (strengthFactor, rangeFactor) for the current ShrinkConfig.</summary>
+        private static (float strength, float range) GetGrabFactors()
+        {
+            var rawStrength = ShrinkConfig.Factor * 1.5f;
+            var maxStrength = ShrinkConfig.Factor < 1.0f ? 1.0f : ShrinkConfig.MaximumStrength;
+            float strengthFactor = Mathf.Clamp(rawStrength, ShrinkConfig.MinimumStrength, maxStrength);
+            return (strengthFactor, ShrinkConfig.Factor);
+        }
+
         // Pupil override constants
         public const float Multiplier = 3f;
         public const int Priority = 10;
@@ -65,7 +74,7 @@ namespace ScalerCore.Handlers
             internal PlayerEyes? MenuEyes;
         }
 
-                /// <summary>
+        /// <summary>
         /// Find PlayerAvatar, retarget ScaleTransform to PlayerAvatarVisuals,
         /// attach PlayerShrinkLink, cache PlayerExpression.
         /// </summary>
@@ -177,12 +186,7 @@ namespace ScalerCore.Handlers
             if (ctrl.IsScaled)
             {
                 var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
-                var rawStrength = ShrinkConfig.Factor * 1.5f;
-                var maxStrength = ShrinkConfig.Factor < 1.0f 
-                                    ? 1.0f 
-                                    : ShrinkConfig.MaximumStrength;
-                float rangeFactor = ShrinkConfig.Factor;
-                float strengthFactor = Mathf.Clamp(rawStrength, ShrinkConfig.MinimumStrength, maxStrength);
+                var (strengthFactor, rangeFactor) = GetGrabFactors();
 
                 // Host enforces grab stats for ALL shrunken players (physics runs on host).
                 // Non-host enforces locally via PhysGrabber.instance as a fallback.
@@ -360,12 +364,7 @@ namespace ScalerCore.Handlers
             if (PhysGrabber.instance != null)
             {
                 var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
-                var rawStrength = ShrinkConfig.Factor * 1.5f;
-                var maxStrength = ShrinkConfig.Factor < 1.0f
-                                    ? 1.0f
-                                    : ShrinkConfig.MaximumStrength;
-                float rangeFactor = ShrinkConfig.Factor;
-                float strengthFactor = Mathf.Clamp(rawStrength, ShrinkConfig.MinimumStrength, maxStrength);
+                var (strengthFactor, rangeFactor) = GetGrabFactors();
 
                 state.OriginalGrabMinDist  = PhysGrabber.instance.minDistanceFromPlayer;
                 state.OriginalGrabMaxDist  = PhysGrabber.instance.maxDistanceFromPlayer;
