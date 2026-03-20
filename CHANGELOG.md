@@ -2,30 +2,44 @@
 
 ## 0.2.0
 
-- Fixed pupils staying large after unshrinking
-- Fixed animation speed staying fast after unshrinking
-- Fixed grab range not being reduced while shrunken
-- Fixed voice pitch getting killed by spewer/hourglass events
-- Fixed menu preview not showing big pupils while shrunken
-- Fixed non-host players having full grab strength while shrunken (host now enforces for all players)
-- Fixed remote players' big pupils not showing in the shop
-- Fixed menu preview shrinking for all players when only one was shrunken
-- Fixed non-host not seeing big pupils in their menu preview
-- Fixed non-host grab strength/range/throw not restoring after unshrinking
-- Grab strength is less punishing now (1.5x scale factor, capped at 100% when shrunk)
+### Bug fixes
+- Pupils no longer stay huge after unshrinking
+- Animation speed resets properly on unshrink
+- Grab range actually scales down while shrunken now
+- Voice pitch no longer gets nuked by spewer/hourglass events
+- Menu preview shows big pupils while shrunken
+- Host now enforces grab stats for all shrunken players, not just local
+- Remote players see big pupils in the shop
+- Menu preview only shrinks for the shrunken player, not everyone
+- Non-host sees their own big pupils in menu preview
+- Non-host grab strength/range/throw restores properly after unshrinking
+- Big pupils yield to expressions while shrunken (no more bleeding through eyelids)
+- Cart pull distance no longer leaks the host's shrink state to other players
+- Shrunken enemies deal scaled damage across the board (mace swings, tumble impacts, instakills)
+- Enemies like Trudge whose mace has `playerKill` no longer instakill when shrunken
+- Damage scaling works even when the HurtCollider doesn't have `enemyHost` set
+
+### Balance
+- Grab strength less punishing (1.5x scale factor, capped at 100% when shrunk)
 - Added MinimumStrength and MaximumStrength config options
-- Grab range and throw still scale directly with size (no mercy bonus)
-- Menu avatar now animates smoothly when shrinking/unshrinking instead of snapping
-- Added safety clamp for negative shrink durations from bad config values
-- Cleaned up log spam (no more per-second status lines, no more AccessTools warnings)
-- Switched to assembly publicizer, removed all reflection from PlayerHandler
-- Replaced AccessTools field scanning in ItemHandler with silent GetField lookups
-- Updated Thunderstore link in README
-- Updated description for better discoverability
-- Fixed big pupils overriding expressions while shrunken
-- Fixed cart pull distance being affected by host's shrink state for all players
-- Removed unused REPOLib dependency
-- Cleaned up duplicated grab strength calculation
+- Grab range and throw scale directly with size (no mercy bonus)
+- Enemy damage scales by shrink factor directly (was a flat 0.1x)
+- Enemy bonk immunity down from 5s to 3s
+- Items stay shrunk indefinitely (was 300s)
+
+### Improvements
+- Menu avatar animates smoothly when shrinking/unshrinking instead of snapping
+- Negative shrink durations from bad configs get clamped to 0
+- Version auto-stamped from csproj via BuildInfo
+
+### Internal
+- Assembly publicizer replaces all reflection in PlayerHandler
+- ItemHandler uses standard GetField instead of AccessTools
+- All enemy-to-player damage scaling lives in one patch now (KnockbackPatch)
+- Deduplicated grab strength formula into GetGrabFactors helper
+- Noisy item field logs downgraded to LogDebug
+- Dropped REPOLib dependency (wasn't actually used)
+- Updated Thunderstore description
 
 ## 0.1.0
 
