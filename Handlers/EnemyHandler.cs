@@ -35,6 +35,9 @@ namespace ScalerCore.Handlers
             internal EnemyBombThrowerHead? BtHead;
             internal Vector3 BtHeadOriginalScale;
 
+            // Rigidbody original local position (for mesh Y compensation)
+            internal Vector3 RbOriginalLocalPos;
+
             // Saved originals
             internal float OriginalDefaultSpeed;
             internal float OriginalAgentRadius;
@@ -138,6 +141,7 @@ namespace ScalerCore.Handlers
             // PhysGrabObject is on the same GO for enemies.
             ctrl._physGrabObject = ctrl.GetComponent<PhysGrabObject>();
 
+            state.RbOriginalLocalPos = ctrl._t.localPosition;
             ctrl.HandlerState = state;
         }
 
@@ -257,10 +261,25 @@ namespace ScalerCore.Handlers
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
-            if (state.AnimTarget == null || ctrl.OriginalScale.x == 0f) return;
+            if (ctrl.OriginalScale.x == 0f) return;
             if (!ctrl.IsScaled && !ctrl._transitioning) return;
             float ratio = ctrl._t.localScale.x / ctrl.OriginalScale.x;
-            state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
+
+            if (state.AnimTarget != null)
+            {
+                state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
+                // The game positions AnimTarget to track the Rigidbody each frame.
+                // Some enemies naturally scale the rb-to-mesh gap, others don't.
+                // Measure the actual gap vs expected gap and correct the difference.
+                float actualGap = ctrl._t.localPosition.y - state.AnimTarget.localPosition.y;
+                float expectedGap = state.RbOriginalLocalPos.y * ratio;
+                float correction = actualGap - expectedGap;
+                if (Mathf.Abs(correction) > 0.01f)
+                {
+                    var pos = state.AnimTarget.localPosition;
+                    state.AnimTarget.localPosition = new Vector3(pos.x, pos.y + correction, pos.z);
+                }
+            }
 
             if (state.BtHead != null)
                 state.BtHead.transform.localScale = state.BtHeadOriginalScale * ratio;

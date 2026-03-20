@@ -18,6 +18,8 @@
 - Shrunken enemies deal scaled damage across the board (mace swings, tumble impacts, instakills)
 - Enemies like Trudge whose mace has `playerKill` no longer instakill when shrunken
 - Damage scaling works even when the HurtCollider doesn't have `enemyHost` set
+- Most shrunken enemies no longer float above or sink into the ground
+- NavMesh agent radius scales with enemy size
 
 ### Balance
 - Grab strength less punishing (1.5x scale factor, capped at 100% when shrunk)
@@ -38,6 +40,7 @@
 - All enemy-to-player damage scaling lives in one patch now (KnockbackPatch)
 - Deduplicated grab strength formula into GetGrabFactors helper
 - Noisy item field logs downgraded to LogDebug
+- EnemyHandler compensates for mesh-to-rigidbody Y offset per frame when shrunken
 - Dropped REPOLib dependency (wasn't actually used)
 - Updated Thunderstore description
 
