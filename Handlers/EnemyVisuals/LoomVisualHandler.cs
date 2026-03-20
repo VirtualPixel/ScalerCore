@@ -46,25 +46,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
             if (_origLeftPosField != null)
                 loomState.OrigLeftWristPos = (Vector3)_origLeftPosField.GetValue(shadow);
 
-            Plugin.Log.LogInfo($"[SC]   Loom: wrists found R={loomState.RightWrist != null} L={loomState.LeftWrist != null}");
-
-            // Diagnostic: dump hierarchy from AnimTarget to understand arm bone structure
-            if (state.AnimTarget != null)
-            {
-                Plugin.Log.LogInfo($"[SC]   Loom: AnimTarget='{state.AnimTarget.name}' localPos={state.AnimTarget.localPosition} parent='{state.AnimTarget.parent?.name}'");
-                DumpChildren(state.AnimTarget, 2);
-            }
-            if (loomState.RightWrist != null)
-            {
-                var chain = "";
-                var t = loomState.RightWrist;
-                while (t != null && t != ep.transform)
-                {
-                    chain = $"{t.name}(lp={t.localPosition:F2},ls={t.localScale:F2})" + (chain.Length > 0 ? " → " + chain : "");
-                    t = t.parent;
-                }
-                Plugin.Log.LogInfo($"[SC]   Loom: R wrist chain: {chain}");
-            }
+            Plugin.Log.LogInfo($"[SC]   Loom: wrists cached R={loomState.RightWrist != null} L={loomState.LeftWrist != null}");
 
             return loomState;
         }
@@ -81,18 +63,6 @@ namespace ScalerCore.Handlers.EnemyVisuals
             // the positions are automatically proportional — no additional scaling needed.
             // Previous attempt to scale wrist positions caused double-scaling (elbow-to-hand
             // stretched wrong). The arm detachment issue needs a different approach.
-        }
-
-        static void DumpChildren(Transform t, int maxDepth, int depth = 0)
-        {
-            if (depth >= maxDepth) return;
-            var indent = new string(' ', (depth + 1) * 2);
-            foreach (Transform child in t)
-            {
-                int renderers = child.GetComponentsInChildren<Renderer>().Length;
-                Plugin.Log.LogInfo($"[SC]   Loom: {indent}{child.name}  localPos={child.localPosition:F2}  localScale={child.localScale:F2}  renderers={renderers}");
-                DumpChildren(child, maxDepth, depth + 1);
-            }
         }
 
         public void OnRestore(ScaleController ctrl, EnemyHandler.State state, object? visualState)

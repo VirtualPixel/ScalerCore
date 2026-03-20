@@ -45,19 +45,6 @@ namespace ScalerCore.Handlers.EnemyVisuals
             if (huggerState.SegmentColliders.Count > 0)
                 Plugin.Log.LogInfo($"[SC]   HeartHugger: found {huggerState.SegmentColliders.Count} segment colliders to scale");
 
-            // Diagnostic: dump AnimTarget details and parent chain
-            if (state.AnimTarget != null)
-            {
-                Plugin.Log.LogInfo($"[SC]   HeartHugger: AnimTarget='{state.AnimTarget.name}' localPos={state.AnimTarget.localPosition} localScale={state.AnimTarget.localScale} parent='{state.AnimTarget.parent?.name}'");
-                // Show immediate children to understand inner structure
-                foreach (Transform child in state.AnimTarget)
-                    Plugin.Log.LogInfo($"[SC]   HeartHugger:   child='{child.name}' localPos={child.localPosition} localScale={child.localScale} renderers={child.GetComponentsInChildren<Renderer>().Length}");
-            }
-            // Dump RB children for collider positions
-            Plugin.Log.LogInfo($"[SC]   HeartHugger: RB localPos={ctrl._t.localPosition} localScale={ctrl._t.localScale}");
-            foreach (Transform child in ctrl._t)
-                Plugin.Log.LogInfo($"[SC]   HeartHugger:   RB child='{child.name}' localPos={child.localPosition}");
-
             return huggerState;
         }
 

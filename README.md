@@ -210,7 +210,8 @@ For all types:
 
 ## Known Issues
 
-- Not all enemy types have been tested -- some may float or clip into the ground while shrunken
+- Hearthugger has visual/grab misalignment when shrunken (cosmetic, gameplay unaffected)
+- Some untested enemy types may float or clip into the ground while shrunken
 - Grab strength/range values are still being tuned for the best feel
 - Non-host grab strength may not scale correctly in multiplayer (physics runs on host)
 - Early access 0.2.0 -- API may evolve, pin your dependency version

@@ -19,7 +19,10 @@
 - Enemies like Trudge whose mace has `playerKill` no longer instakill when shrunken
 - Damage scaling works even when the HurtCollider doesn't have `enemyHost` set
 - NavMesh agent radius scales with enemy size
-- Known: Chef, Hearthugger, and Loom have minor visual alignment issues when shrunken (cosmetic only, gameplay unaffected)
+- Fixed Chef, Mentalist, Reaper, Trudge, and Elsa sinking into the ground when shrunken
+- Fixed Loom (Shadow) arms detaching from body when shrunken
+- Fixed AnimTarget discovery walking up to Enable container on enemies with renderers on the Rigidbody (caused double-scaling on Hearthugger and Loom)
+- Known: Hearthugger still has visual/grab misalignment when shrunken (cosmetic, gameplay unaffected)
 
 ### Balance
 - Grab strength less punishing (1.5x scale factor, capped at 100% when shrunk)
