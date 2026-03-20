@@ -242,8 +242,11 @@ namespace ScalerCore.Handlers
                 state.EnemyRb.rotationSpeedIdle  = state.OriginalRotSpeedIdle;
             }
 
-            // Visual handler restore
-            state.VisualHandler?.OnRestore(ctrl, state, state.VisualState);
+            // Visual handler restore — only after the transition animation completes.
+            // During _transitioning, OnLateUpdate still runs and manages the visual.
+            // Calling OnRestore mid-transition would reset localPosition and flicker.
+            if (!ctrl._transitioning)
+                state.VisualHandler?.OnRestore(ctrl, state, state.VisualState);
         }
 
         /// <summary>
