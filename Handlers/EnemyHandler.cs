@@ -266,20 +266,7 @@ namespace ScalerCore.Handlers
             float ratio = ctrl._t.localScale.x / ctrl.OriginalScale.x;
 
             if (state.AnimTarget != null)
-            {
                 state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
-                // The game positions AnimTarget to track the Rigidbody each frame.
-                // Some enemies naturally scale the rb-to-mesh gap, others don't.
-                // Measure the actual gap vs expected gap and correct the difference.
-                float actualGap = ctrl._t.localPosition.y - state.AnimTarget.localPosition.y;
-                float expectedGap = state.RbOriginalLocalPos.y * ratio;
-                float correction = actualGap - expectedGap;
-                if (Mathf.Abs(correction) > 0.01f)
-                {
-                    var pos = state.AnimTarget.localPosition;
-                    state.AnimTarget.localPosition = new Vector3(pos.x, pos.y + correction, pos.z);
-                }
-            }
 
             if (state.BtHead != null)
                 state.BtHead.transform.localScale = state.BtHeadOriginalScale * ratio;
