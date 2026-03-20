@@ -58,18 +58,33 @@ namespace ScalerCore.Patches
     [HarmonyPatch(typeof(HurtCollider), "PlayerHurt")]
     internal static class KnockbackPatch
     {
-        static void Prefix(HurtCollider __instance, out (float force, float torque) __state)
+        static void Prefix(HurtCollider __instance, out (bool playerKill, int playerDamage, int tumbleDamage, float force, float torque) __state)
         {
-            __state = (__instance.playerTumbleForce, __instance.playerTumbleTorque);
-            if (__instance.enemyHost == null) return;
-            var ctrl = __instance.enemyHost.Rigidbody?.GetComponent<ScaleController>();
+            __state = (__instance.playerKill, __instance.playerDamage, __instance.playerTumbleImpactHurtDamage, __instance.playerTumbleForce, __instance.playerTumbleTorque);
+            ScaleController? ctrl = null;
+            if (__instance.enemyHost != null)
+            {
+                ctrl = __instance.enemyHost.Rigidbody?.GetComponent<ScaleController>();
+            }
+            else
+            {
+                var parent = __instance.GetComponentInParent<EnemyParent>();
+                if (parent != null)
+                    ctrl = parent.GetComponentInChildren<ScaleController>();
+            }
             if (ctrl == null || !ctrl.IsScaled) return;
+            __instance.playerKill = false;
+            __instance.playerDamage = Mathf.RoundToInt(__instance.playerDamage * ShrinkConfig.Factor);
+            __instance.playerTumbleImpactHurtDamage = Mathf.RoundToInt(__instance.playerTumbleImpactHurtDamage * ShrinkConfig.Factor);
             __instance.playerTumbleForce  *= ShrinkConfig.Factor;
             __instance.playerTumbleTorque *= ShrinkConfig.Factor;
         }
 
-        static void Postfix(HurtCollider __instance, (float force, float torque) __state)
+        static void Postfix(HurtCollider __instance, (bool playerKill, int playerDamage, int tumbleDamage, float force, float torque) __state)
         {
+            __instance.playerKill = __state.playerKill;
+            __instance.playerDamage = __state.playerDamage;
+            __instance.playerTumbleImpactHurtDamage = __state.tumbleDamage;
             __instance.playerTumbleForce  = __state.force;
             __instance.playerTumbleTorque = __state.torque;
         }
@@ -84,35 +99,6 @@ namespace ScalerCore.Patches
             var ctrl = __instance.enemy?.Rigidbody?.GetComponent<ScaleController>();
             if (ctrl == null || !ctrl.IsScaled) return;
             ScaleManager.RestoreImmediate(ctrl.gameObject);
-        }
-    }
-
-    [HarmonyPatch(typeof(PlayerHealth), nameof(PlayerHealth.Hurt))]
-    internal static class EnemyDamagePatch
-    {
-        static void Prefix(ref int damage, int enemyIndex)
-        {
-            if (!AttackerIsScaled(enemyIndex)) return;
-            damage = Mathf.RoundToInt(damage * ShrinkConfig.EnemyDamageMult);
-        }
-
-        static bool AttackerIsScaled(int enemyIndex)
-        {
-            if (enemyIndex < 0)
-            {
-                Plugin.Log.LogInfo($"[SC] EnemyDamagePatch: enemyIndex={enemyIndex} (no attacker / not an enemy hit)");
-                return false;
-            }
-            var enemy = SemiFunc.EnemyGetFromIndex(enemyIndex);
-            if (enemy == null)
-            {
-                Plugin.Log.LogInfo($"[SC] EnemyDamagePatch: enemyIndex={enemyIndex} → enemy not found");
-                return false;
-            }
-            var ctrl = enemy.Rigidbody?.GetComponent<ScaleController>();
-            bool shrunken = ctrl != null && ctrl.IsScaled;
-            Plugin.Log.LogInfo($"[SC] EnemyDamagePatch: attacker={enemy.gameObject.name}  shrunken={shrunken}");
-            return shrunken;
         }
     }
 }
