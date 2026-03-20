@@ -92,7 +92,9 @@ namespace ScalerCore.Handlers
                 CheckVisualGO(bssa.gameObject);
 
             // Walk up: if parent covers more renderers (sibling meshes), adopt it.
-            // Stop at EnemyParent or if parent has sibling Animator GOs (independent rigs).
+            // Stop at EnemyParent, if parent has sibling Animator GOs (independent rigs),
+            // or if a sibling has EnemyRigidbody (scaling the parent would cascade to the
+            // physics body, causing double-scaling — HeartHugger, Shadow/Loom hit this).
             while (bestVisual != null
                    && bestVisual.parent != null
                    && bestVisual.parent != ep.transform)
@@ -100,14 +102,15 @@ namespace ScalerCore.Handlers
                 int current = bestVisual.GetComponentsInChildren<Renderer>().Length;
                 int parent  = bestVisual.parent.GetComponentsInChildren<Renderer>().Length;
                 if (parent <= current) break;
-                bool hasSiblingAnimator = false;
+                bool stopWalkUp = false;
                 foreach (Transform sib in bestVisual.parent)
                 {
                     if (sib == bestVisual) continue;
                     var a = sib.GetComponent<Animator>();
-                    if (a != null && a.runtimeAnimatorController != null) { hasSiblingAnimator = true; break; }
+                    if (a != null && a.runtimeAnimatorController != null) { stopWalkUp = true; break; }
+                    if (sib.GetComponent<EnemyRigidbody>() != null) { stopWalkUp = true; break; }
                 }
-                if (hasSiblingAnimator) break;
+                if (stopWalkUp) break;
                 bestVisual = bestVisual.parent;
             }
 
