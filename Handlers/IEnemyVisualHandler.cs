@@ -7,7 +7,7 @@ namespace ScalerCore.Handlers
     /// Plugs into EnemyHandler to handle AnimTarget/mesh adjustments
     /// that vary across enemy types (sinkers, heart hugger, shadow, etc.).
     /// </summary>
-    public interface IEnemyVisualHandler
+    internal interface IEnemyVisualHandler
     {
         /// <summary>
         /// Called once during EnemyHandler.Setup to capture per-enemy visual state.
@@ -32,7 +32,7 @@ namespace ScalerCore.Handlers
     /// Maps enemy internal names (e.g. "Tumbler") to their IEnemyVisualHandler.
     /// Falls back to DefaultVisualHandler when no override is registered.
     /// </summary>
-    public static class EnemyVisualRegistry
+    internal static class EnemyVisualRegistry
     {
         static readonly Dictionary<string, IEnemyVisualHandler> _overrides = new();
         static readonly IEnemyVisualHandler _default = new EnemyVisuals.DefaultVisualHandler();
@@ -42,7 +42,7 @@ namespace ScalerCore.Handlers
         /// Extracts the enemy name from an EnemyParent's GameObject name.
         /// "Enemy - Tumbler(Clone)" → "Tumbler"
         /// </summary>
-        public static string ExtractEnemyName(EnemyParent ep)
+        internal static string ExtractEnemyName(EnemyParent ep)
         {
             string raw = ep.gameObject.name;
 
@@ -63,7 +63,7 @@ namespace ScalerCore.Handlers
         /// Returns the visual handler for the given enemy name,
         /// or the default handler if no override is registered.
         /// </summary>
-        public static IEnemyVisualHandler Resolve(string enemyName)
+        internal static IEnemyVisualHandler Resolve(string enemyName)
         {
             EnsureRegistered();
             return _overrides.TryGetValue(enemyName, out var handler) ? handler : _default;
@@ -72,7 +72,7 @@ namespace ScalerCore.Handlers
         /// <summary>
         /// Registers all known per-enemy visual overrides. Safe to call multiple times.
         /// </summary>
-        public static void EnsureRegistered()
+        static void EnsureRegistered()
         {
             if (_registered) return;
             _registered = true;
