@@ -3,8 +3,8 @@ using UnityEngine;
 namespace ScalerCore.Handlers
 {
     /// <summary>
-    /// Door-specific scaling. Adjusts the HingeJoint anchor after scaling
-    /// so the door still pivots at the right point.
+    /// Door-specific scaling. After the root transform scales, shifts the door's
+    /// world position so the hinge point stays in place.
     /// </summary>
     internal class DoorHandler : IScaleHandler
     {
@@ -12,6 +12,7 @@ namespace ScalerCore.Handlers
         {
             internal HingeJoint? Joint;
             internal Vector3 OriginalAnchor;
+            internal Vector3 HingeWorldPos; // where the hinge was before shrinking
         }
 
         public void Setup(ScaleController ctrl)
@@ -25,14 +26,10 @@ namespace ScalerCore.Handlers
 
         public void OnScale(ScaleController ctrl)
         {
-            // Rescale the anchor to compensate — when localScale shrinks,
-            // the anchor (in local space) needs to grow so it maps to the
-            // same world-space position.
             var state = (State?)ctrl.HandlerState;
-            if (state?.Joint == null) return;
-            float ratio = ctrl._options.Factor;
-            if (ratio > 0f)
-                state.Joint.anchor = state.OriginalAnchor / ratio;
+            if (state == null) return;
+            // Snapshot where the hinge is in world space before anything moves.
+            state.HingeWorldPos = ctrl.transform.TransformPoint(state.OriginalAnchor);
         }
 
         public void OnRestore(ScaleController ctrl, bool isBonk)
@@ -43,7 +40,21 @@ namespace ScalerCore.Handlers
         }
 
         public void OnUpdate(ScaleController ctrl) { }
-        public void OnLateUpdate(ScaleController ctrl) { }
+
+        public void OnLateUpdate(ScaleController ctrl)
+        {
+            var state = (State?)ctrl.HandlerState;
+            if (state == null) return;
+            if (!ctrl.IsScaled && !ctrl._transitioning) return;
+
+            // After the scale is applied, the hinge anchor (in local space) maps to a
+            // different world position. Move the door so the hinge stays where it was.
+            Vector3 currentHingeWorld = ctrl.transform.TransformPoint(state.OriginalAnchor);
+            Vector3 correction = state.HingeWorldPos - currentHingeWorld;
+            if (correction.sqrMagnitude > 0.0001f)
+                ctrl.transform.position += correction;
+        }
+
         public void OnDestroy(ScaleController ctrl)
         {
             OnRestore(ctrl, false);
