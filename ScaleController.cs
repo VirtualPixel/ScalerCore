@@ -253,6 +253,33 @@ namespace ScalerCore
             }
         }
 
+        // Enemies despawn via SetActive(false) — the same GO is re-enabled on respawn.
+        // Restore scale here so respawned enemies aren't still shrunken.
+        public override void OnDisable()
+        {
+            base.OnDisable();
+            if (!IsScaled || Handler is not Handlers.EnemyHandler) return;
+
+            Plugin.Log.LogInfo($"[SC] DISABLE (despawn) {_displayName}  restoring scale");
+
+            _t.localScale  = OriginalScale;
+            _animScale     = OriginalScale;
+            _target        = OriginalScale;
+            _transitioning = false;
+            IsScaled       = false;
+            _invertedActive = false;
+            _shrinkTimer   = 0f;
+            Scaled.Remove(this);
+
+            if (_rb != null) _rb.mass = _originalMass;
+            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+
+            Handler?.OnRestore(this, isBonk: false);
+            _audioPitch.RestorePitch();
+            ItemHandler.OnRestoreFields(_scaledItemFields);
+            _scaledItemFields = null;
+        }
+
         void OnDestroy()
         {
             if (IsScaled)

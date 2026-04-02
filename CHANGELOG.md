@@ -21,6 +21,7 @@
 - Fixed Tricycle (Bella) trike mesh not scaling — rider shrank but the bike stayed full size
 - Single doors now cleanly break off their hinges when shrunken instead of floating in place
 - Birthday Boy's balloons now shrink along with him
+- Enemies killed or despawned while shrunken no longer respawn at shrunken size
 - Replaced most reflection with direct publicizer access for better performance
 - Fixed Loom (Shadow) NRE spam in EnemyShadow.HandLogic after unshrinking
 
