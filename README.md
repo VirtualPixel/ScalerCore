@@ -6,7 +6,7 @@ If you're building a mod that changes the size of things (shrink rays, growth po
 
 **This is a library, not a standalone mod.** End users don't need to interact with it directly. If you're a player, you probably got here because a mod like [ShrinkerGun: COMPRESSOR](https://thunderstore.io/c/repo/p/Vippy/ShrinkerGun/) depends on it.
 
-> **v0.2.0 -- Early Access.** The API surface is small and may change. Pin your dependency version.
+> **v0.3.0 -- Early Access.** The API surface is small and may change. Pin your dependency version.
 
 ## Installation
 
@@ -214,7 +214,7 @@ For all types:
 - Some untested enemy types may float or clip into the ground while shrunken
 - Grab strength/range values are still being tuned for the best feel
 - Non-host grab strength may not scale correctly in multiplayer (physics runs on host)
-- Early access 0.2.0 -- API may evolve, pin your dependency version
+- Early access 0.3.0 -- API may evolve, pin your dependency version
 
 ## Dependencies
 

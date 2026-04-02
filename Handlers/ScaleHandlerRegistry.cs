@@ -57,8 +57,6 @@ namespace ScalerCore.Handlers
             // Items: has ItemAttributes but NOT ValuableObject (valuables matched above with higher list position).
             Register(new ItemHandler(),
                 go => go.GetComponent<ItemAttributes>() != null && go.GetComponent<ValuableObject>() == null, 0);
-            Register(new DoorHandler(),
-                go => go.GetComponent<PhysGrabHinge>() != null, 0);
         }
     }
 }

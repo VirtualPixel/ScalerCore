@@ -43,9 +43,6 @@ namespace ScalerCore
         static void Postfix(PhysGrabHinge __instance)
         {
             if (__instance.GetComponent<ScaleController>() != null) return;
-            // Scale the root so the Rigidbody collider shrinks with the door.
-            // If ScaleTarget is set to a visual child, the collider on the root stays
-            // at full size and leaves a grab-able ghost. Root scaling avoids that.
             __instance.gameObject.AddComponent<ScaleController>();
         }
     }

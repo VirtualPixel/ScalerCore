@@ -48,6 +48,10 @@ namespace ScalerCore
         internal IScaleHandler? Handler;
         internal object? HandlerState;
 
+        // When true, the handler owns all scaling — controller won't touch _t.localScale.
+        // Available for handlers that need to scale children individually.
+        internal bool HandlerOwnsScale = false;
+
         internal PhysGrabObject? _physGrabObject;
 
         // ItemEquippable.currentState is private. We check it via reflection to detect
@@ -235,12 +239,13 @@ namespace ScalerCore
             {
                 float speed = _options.Speed * OriginalScale.magnitude;
                 _animScale = Vector3.MoveTowards(_animScale, _target, speed * Time.deltaTime);
-                _t.localScale = _animScale;
+                if (!HandlerOwnsScale)
+                    _t.localScale = _animScale;
 
                 if (_animScale == _target)
                 {
                     _transitioning = false;
-                    Plugin.Log.LogInfo($"[SC] LATE_ANIM DONE  {_displayName}  finalScale={_t.localScale}");
+                    Plugin.Log.LogInfo($"[SC] LATE_ANIM DONE  {_displayName}  finalScale={_animScale}");
                 }
             }
 
@@ -249,7 +254,8 @@ namespace ScalerCore
 
             // Items and valuables: force-apply every frame while shrunken and not animating.
             // Skip while in inventory — let the game manage the item's scale there.
-            if (!isPlayer && IsScaled && !_transitioning && !inInventory)
+            // Skip when handler owns scaling (e.g. doors scale children individually).
+            if (!isPlayer && !HandlerOwnsScale && IsScaled && !_transitioning && !inInventory)
             {
                 if (_t.localScale != _target)
                     Plugin.Log.LogWarning($"[SC] LATE_FORCE  {_displayName}  was={_t.localScale}  forcing={_target}");
@@ -278,6 +284,10 @@ namespace ScalerCore
                 if (Mathf.Approximately(options.Factor, _options.Factor))
                 {
                     DispatchExpand();
+                    // Inverted: set fresh bonk immunity so the gun's own damage
+                    // doesn't immediately trigger re-shrink via PlayerBonkPatch.
+                    if (_invertedActive)
+                        _bonkImmuneTimer = _options.BonkImmuneDuration;
                     return;
                 }
                 // Different factor: update options and animate to the new target without restoring first.
@@ -556,6 +566,7 @@ namespace ScalerCore
         public void RequestInvertedReshrink()
         {
             if (IsScaled || !_invertedActive) return;
+            if (_bonkImmuneTimer > 0f) return;
             if (SemiFunc.IsMasterClientOrSingleplayer())
             {
                 DispatchShrink(_options);
