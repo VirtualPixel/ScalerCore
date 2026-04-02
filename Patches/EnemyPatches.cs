@@ -87,6 +87,29 @@ namespace ScalerCore.Patches
         }
     }
 
+    /// <summary>
+    /// HeartHugger's gas guider pulls the player to a point 1.5 units in front of
+    /// the head, which is too far for a shrunken enemy. After the game's Update
+    /// positions the guider, scale the distance from the head so the player is
+    /// pulled to the correct proportional distance from the tiny mouth.
+    /// </summary>
+    [HarmonyPatch(typeof(EnemyHeartHuggerGasGuider), "Update")]
+    internal static class HeartHuggerGasPullPatch
+    {
+        static void Postfix(EnemyHeartHuggerGasGuider __instance)
+        {
+            if (__instance.enemyHeartHugger == null) return;
+            var ctrl = __instance.enemyHeartHugger.enemy?.Rigidbody?.GetComponent<ScaleController>();
+            if (ctrl == null || !ctrl.IsScaled) return;
+
+            // After the game lerps the guider toward head + 1.5 forward,
+            // scale the offset so the target is proportionally closer.
+            Vector3 headPos = __instance.enemyHeartHugger.headCenterTransform.position;
+            Vector3 toGuider = __instance.transform.position - headPos;
+            __instance.transform.position = headPos + toGuider * ctrl._options.Factor;
+        }
+    }
+
     [HarmonyPatch(typeof(EnemyHealth), nameof(EnemyHealth.Hurt))]
     internal static class EnemyBonkPatch
     {

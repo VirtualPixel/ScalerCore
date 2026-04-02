@@ -5,13 +5,18 @@ namespace ScalerCore.Handlers.EnemyVisuals
 {
     /// <summary>
     /// Visual handler for HeartHugger (Heart Hugger).
-    /// Fixes: visual floating above grab area by scaling AnimTarget.localPosition.y,
-    /// and scales segment collider GOs that sit outside the main RB hierarchy.
+    /// The RB and Visuals are siblings under the Enable container.
+    /// ScaleController handles the RB; this handler scales the Visuals GO
+    /// and its localPosition so the mesh stays aligned with the shrunken physics body.
+    /// External COLLIDER Segment GOs are also tracked and scaled.
     /// </summary>
     internal class HeartHuggerVisualHandler : IEnemyVisualHandler
     {
         internal sealed class HuggerState
         {
+            internal Transform? VisualsTransform;
+            internal Vector3 VisualsOriginalScale;
+            internal Vector3 VisualsOriginalLocalPos;
             internal List<Transform>? SegmentColliders;
             internal List<Vector3>? SegmentOriginalScales;
             internal List<Vector3>? SegmentOriginalLocalPositions;
@@ -21,21 +26,34 @@ namespace ScalerCore.Handlers.EnemyVisuals
         {
             var huggerState = new HuggerState();
 
-            // Find segment collider GOs on layer 10 that are children of EnemyParent
-            // but NOT children of the Rigidbody or AnimTarget.
-            // These are "COLLIDER Segment 1/2/3" in the hierarchy.
+            // Find the Visuals sibling of the Rigidbody within Enable.
+            // It's a direct child of AnimTarget (Enable) that is NOT the RB
+            // and NOT the Controller, and has renderers in its children.
+            if (state.AnimTarget != null)
+            {
+                foreach (Transform child in state.AnimTarget)
+                {
+                    if (child.GetComponent<EnemyRigidbody>() != null) continue;
+                    if (child.GetComponentInChildren<Renderer>() == null) continue;
+
+                    huggerState.VisualsTransform = child;
+                    huggerState.VisualsOriginalScale = child.localScale;
+                    huggerState.VisualsOriginalLocalPos = child.localPosition;
+                    Plugin.Log.LogInfo($"[SC]   HeartHugger: visual root={child.name}  localPos={child.localPosition}");
+                    break;
+                }
+            }
+
+            // Find COLLIDER Segment GOs outside AnimTarget
             huggerState.SegmentColliders = new List<Transform>();
             huggerState.SegmentOriginalScales = new List<Vector3>();
             huggerState.SegmentOriginalLocalPositions = new List<Vector3>();
 
             foreach (var col in ep.GetComponentsInChildren<Collider>(includeInactive: true))
             {
-                // Layer 10 colliders that contain "Segment" in name
                 if (col.gameObject.layer != 10) continue;
                 if (!col.gameObject.name.Contains("Segment")) continue;
-
-                // Skip if it's under the Rigidbody (those scale with ctrl._t already)
-                if (col.transform.IsChildOf(ctrl._t)) continue;
+                if (state.AnimTarget != null && col.transform.IsChildOf(state.AnimTarget)) continue;
 
                 huggerState.SegmentColliders.Add(col.transform);
                 huggerState.SegmentOriginalScales.Add(col.transform.localScale);
@@ -43,46 +61,49 @@ namespace ScalerCore.Handlers.EnemyVisuals
             }
 
             if (huggerState.SegmentColliders.Count > 0)
-                Plugin.Log.LogInfo($"[SC]   HeartHugger: found {huggerState.SegmentColliders.Count} segment colliders to scale");
+                Plugin.Log.LogInfo($"[SC]   HeartHugger: found {huggerState.SegmentColliders.Count} external segment colliders");
 
             return huggerState;
         }
 
         public void OnLateUpdate(ScaleController ctrl, EnemyHandler.State state, object? visualState, float ratio)
         {
-            if (state.AnimTarget == null) return;
+            if (visualState is not HuggerState hugger) return;
 
-            // Scale mesh
-            state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
+            // Scale the Visuals GO directly — NOT Enable (which contains the RB).
+            // ScaleController handles the RB; we handle the visual mesh.
+            // Use world-space positioning so the Visuals follow the RB's position
+            // AND rotation — when tipped/knocked over, the offset rotates with the body.
+            if (hugger.VisualsTransform != null)
+            {
+                hugger.VisualsTransform.localScale = hugger.VisualsOriginalScale * ratio;
+                Vector3 offset = (hugger.VisualsOriginalLocalPos - state.RbOriginalLocalPos) * ratio;
+                hugger.VisualsTransform.position = ctrl._t.position + ctrl._t.rotation * offset;
+            }
 
-            // Scale AnimTarget Y position so visual tracks scaled collider position.
-            var pos = state.AnimOriginalLocalPos;
-            pos.y *= ratio;
-            state.AnimTarget.localPosition = pos;
-
-            // Scale segment colliders
-            if (visualState is HuggerState hugger && hugger.SegmentColliders != null)
+            // Scale external segment colliders
+            if (hugger.SegmentColliders != null)
             {
                 for (int i = 0; i < hugger.SegmentColliders.Count; i++)
                 {
                     if (hugger.SegmentColliders[i] == null) continue;
                     hugger.SegmentColliders[i].localScale = hugger.SegmentOriginalScales![i] * ratio;
-                    var segPos = hugger.SegmentOriginalLocalPositions![i];
-                    segPos.y *= ratio;
-                    hugger.SegmentColliders[i].localPosition = segPos;
+                    hugger.SegmentColliders[i].localPosition = hugger.SegmentOriginalLocalPositions![i] * ratio;
                 }
             }
         }
 
         public void OnRestore(ScaleController ctrl, EnemyHandler.State state, object? visualState)
         {
-            if (state.AnimTarget != null)
+            if (visualState is not HuggerState hugger) return;
+
+            if (hugger.VisualsTransform != null)
             {
-                state.AnimTarget.localScale = state.AnimOriginalScale;
-                state.AnimTarget.localPosition = state.AnimOriginalLocalPos;
+                hugger.VisualsTransform.localScale = hugger.VisualsOriginalScale;
+                hugger.VisualsTransform.localPosition = hugger.VisualsOriginalLocalPos;
             }
 
-            if (visualState is HuggerState hugger && hugger.SegmentColliders != null)
+            if (hugger.SegmentColliders != null)
             {
                 for (int i = 0; i < hugger.SegmentColliders.Count; i++)
                 {

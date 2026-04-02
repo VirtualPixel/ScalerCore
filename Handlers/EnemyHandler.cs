@@ -243,7 +243,9 @@ namespace ScalerCore.Handlers
             // Visual handler restore — only after the transition animation completes.
             // During _transitioning, OnLateUpdate still runs and manages the visual.
             // Calling OnRestore mid-transition would reset localPosition and flicker.
-            if (!ctrl._transitioning)
+            // Exception: bonk is instant — restore immediately so the mesh doesn't
+            // stay stuck at shrunken scale (especially with HandlerOwnsScale).
+            if (isBonk || !ctrl._transitioning)
                 state.VisualHandler?.OnRestore(ctrl, state, state.VisualState);
         }
 
@@ -278,7 +280,9 @@ namespace ScalerCore.Handlers
             if (state == null) return;
             if (ctrl.OriginalScale.x == 0f) return;
             if (!ctrl.IsScaled && !ctrl._transitioning) return;
-            float ratio = ctrl._t.localScale.x / ctrl.OriginalScale.x;
+            // Use _animScale for ratio — it tracks intended scale even when
+            // HandlerOwnsScale is true and _t.localScale isn't being updated.
+            float ratio = ctrl._animScale.x / ctrl.OriginalScale.x;
 
             if (state.VisualHandler != null)
                 state.VisualHandler.OnLateUpdate(ctrl, state, state.VisualState, ratio);
