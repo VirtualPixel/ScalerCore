@@ -234,7 +234,6 @@ For all types:
 ## Known Issues
 
 - Some untested enemy types may float or clip into the ground while shrunken
-- Non-host grab strength may not scale correctly in multiplayer (physics runs on host)
 
 ## Dependencies
 

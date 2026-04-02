@@ -71,6 +71,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
             // Scale the mesh
             state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
 
+            // Arm IK targets are scaled by SpringPoseStretchPatch in EnemyPatches.
             // Scale attack distances so the Loom doesn't reach from full distance
             if (loom.Shadow != null)
             {

@@ -110,25 +110,6 @@ namespace ScalerCore.Patches
         }
     }
 
-    /// <summary>
-    /// Loom's UpdateHandPositionTo moves wrists to world-space player positions
-    /// via SmoothDamp, ignoring body scale. Scale the hand target toward the body
-    /// center so arms reach proportionally when shrunken.
-    /// </summary>
-    [HarmonyPatch(typeof(EnemyShadow), "UpdateHandPositionTo")]
-    internal static class LoomArmReachPatch
-    {
-        static void Prefix(EnemyShadow __instance, ref Vector3 _handTarget)
-        {
-            var ctrl = __instance.enemy?.Rigidbody?.GetComponent<ScaleController>();
-            if (ctrl == null || !ctrl.IsScaled) return;
-
-            Vector3 body = __instance.transform.position;
-            Vector3 toTarget = _handTarget - body;
-            _handTarget = body + toTarget * ctrl._options.Factor;
-        }
-    }
-
     [HarmonyPatch(typeof(EnemyHealth), nameof(EnemyHealth.Hurt))]
     internal static class EnemyBonkPatch
     {
