@@ -132,6 +132,11 @@ namespace ScalerCore.Handlers
                 state.AnimTarget           = bestVisual;
                 state.AnimOriginalScale    = state.AnimTarget.localScale;
                 state.AnimOriginalLocalPos = state.AnimTarget.localPosition;
+                Plugin.Log.LogInfo($"[SC]   AnimTarget='{bestVisual.gameObject.name}'  renderers={bestRenderers}  scale={state.AnimOriginalScale}");
+            }
+            else
+            {
+                Plugin.Log.LogWarning($"[SC]   AnimTarget NOT FOUND for {ep.gameObject.name}");
             }
 
             state.NavAgent  = ep.GetComponentInChildren<EnemyNavMeshAgent>();
@@ -170,13 +175,13 @@ namespace ScalerCore.Handlers
             if (state.NavAgent != null)
             {
                 state.OriginalDefaultSpeed = (float)_navDefaultSpeedField.GetValue(state.NavAgent);
-                _navDefaultSpeedField.SetValue(state.NavAgent, state.OriginalDefaultSpeed * ShrinkConfig.EnemyShrinkSpeedFactor);
+                _navDefaultSpeedField.SetValue(state.NavAgent, state.OriginalDefaultSpeed * ctrl._options.SpeedFactor);
                 var agent = (NavMeshAgent)_navAgentField.GetValue(state.NavAgent);
                 if (agent != null)
                 {
-                    agent.speed  *= ShrinkConfig.EnemyShrinkSpeedFactor;
+                    agent.speed  *= ctrl._options.SpeedFactor;
                     state.OriginalAgentRadius = agent.radius;
-                    agent.radius *= ShrinkConfig.Factor;
+                    agent.radius *= ctrl._options.Factor;
                     Plugin.Log.LogInfo($"[SC]   navSpeed {state.OriginalDefaultSpeed:F2} → {(float)_navDefaultSpeedField.GetValue(state.NavAgent):F2}  radius {state.OriginalAgentRadius:F2} → {agent.radius:F2}");
                 }
             }
@@ -197,7 +202,7 @@ namespace ScalerCore.Handlers
                 state.OriginalRotSpeedIdle  = state.EnemyRb.rotationSpeedIdle;
                 // Factor^2: follow force scales with both size and physical presence.
                 // A 40% enemy has 16% follow force — weak enough for 0-strength grab.
-                float ff = ShrinkConfig.Factor * ShrinkConfig.Factor;
+                float ff = ctrl._options.Factor * ctrl._options.Factor;
                 state.EnemyRb.positionSpeedChase = state.OriginalSpeedChase * ff;
                 state.EnemyRb.positionSpeedIdle  = state.OriginalSpeedIdle  * ff;
                 state.EnemyRb.rotationSpeedChase = state.OriginalRotSpeedChase * ff;
@@ -262,7 +267,7 @@ namespace ScalerCore.Handlers
             // Re-enforce our target mass every frame while shrunken.
             if (ctrl._rb != null)
             {
-                float wanted = Mathf.Clamp(ctrl._originalMass * ShrinkConfig.Factor, 0.5f, ShrinkConfig.ShrunkMassCap);
+                float wanted = Mathf.Clamp(ctrl._originalMass * ctrl._options.Factor, 0.5f, ctrl._options.MassCap);
                 if (Mathf.Abs(ctrl._rb.mass - wanted) > 0.001f)
                     ctrl._rb.mass = wanted;
             }
