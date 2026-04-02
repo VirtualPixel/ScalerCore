@@ -65,7 +65,7 @@ namespace ScalerCore.Handlers
             // Orb radius: game recalculates orbRadius each frame — override to match shrunken size.
             var state = (State?)ctrl.HandlerState;
             if (state?.ItemOrb != null)
-                OnUpdateOrb(state.ItemOrb);
+                OnUpdateOrb(state.ItemOrb, ctrl._options.Factor);
         }
 
         public void OnLateUpdate(ScaleController ctrl)
@@ -85,10 +85,10 @@ namespace ScalerCore.Handlers
         /// Scans all MonoBehaviours on the GO (and referenced ScriptableObjects) for matching fields.
         /// Called from ScaleController for ALL object types.
         /// </summary>
-        internal static List<ScaledField>? OnShrinkFields(ScaleController ctrl)
+        internal static List<ScaledField>? OnShrinkFields(ScaleController ctrl, float factor)
         {
             var scaledFields = new List<ScaledField>();
-            float f = ShrinkConfig.Factor;
+            float f = factor;
 
             // Collect targets: all MonoBehaviours on this GO + any SOs they reference.
             var targets = new List<object>();
@@ -164,9 +164,9 @@ namespace ScalerCore.Handlers
         /// Per-frame orb radius enforcement — game recalculates orbRadius each frame from orbRadiusOriginal * multiplier.
         /// Override it every frame to keep the effective radius matched to shrunken size.
         /// </summary>
-        internal static void OnUpdateOrb(ItemOrb itemOrb)
+        internal static void OnUpdateOrb(ItemOrb itemOrb, float factor)
         {
-            itemOrb.orbRadius = itemOrb.orbRadiusOriginal * ShrinkConfig.Factor;
+            itemOrb.orbRadius = itemOrb.orbRadiusOriginal * factor;
         }
     }
 }

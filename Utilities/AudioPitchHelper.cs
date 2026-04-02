@@ -49,9 +49,9 @@ namespace ScalerCore.Utilities
         /// Apply pitch multiplier to all Sound objects under searchRoot.
         /// Called once at shrink time. Multiplier: 1 + (1 - factor) * 0.5.
         /// </summary>
-        internal void ApplyPitch(Component searchRoot)
+        internal void ApplyPitch(Component searchRoot, float factor)
         {
-            float mult = 1f + (1f - ShrinkConfig.Factor) * 0.5f;
+            float mult = 1f + (1f - factor) * 0.5f;
             _pitchedSounds          = GatherSounds(searchRoot);
             _soundOriginalPitch     = _pitchedSounds.Select(s => s.Pitch).ToArray();
             _soundOriginalLoopPitch = _pitchedSounds

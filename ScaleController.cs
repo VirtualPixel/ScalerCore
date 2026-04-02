@@ -307,10 +307,10 @@ namespace ScalerCore
 
             // Pitch all Sound objects for this entity.
             var ep = GetComponentInParent<EnemyParent>();
-            _audioPitch.ApplyPitch(ep != null ? (Component)ep : this);
+            _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, _options.Factor);
 
             // Scale item-specific effect fields (explosion size, orb radius, etc.) — cross-cutting.
-            _scaledItemFields = ItemHandler.OnShrinkFields(this);
+            _scaledItemFields = ItemHandler.OnShrinkFields(this, _options.Factor);
         }
 
         public void DispatchExpand()
@@ -441,8 +441,8 @@ namespace ScalerCore
             SetForceGrabPoint(false);
             AssetManager.instance?.PhysImpactEffect(_t.position);
             var ep = GetComponentInParent<EnemyParent>();
-            _audioPitch.ApplyPitch(ep != null ? (Component)ep : this);
-            _scaledItemFields = ItemHandler.OnShrinkFields(this);
+            _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, _options.Factor);
+            _scaledItemFields = ItemHandler.OnShrinkFields(this, _options.Factor);
 
             // Handler-specific client-side shrink (player voice/camera, etc.)
             Handler?.OnScale(this);
