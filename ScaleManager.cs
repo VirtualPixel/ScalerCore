@@ -15,6 +15,11 @@ namespace ScalerCore
         /// Gets existing ScaleController or returns if none attached.
         /// Skips the target if its handler type is not included in <see cref="ScaleOptions.AllowedTargets"/>.
         /// </summary>
+        public static void Apply(GameObject target) => Apply(target, ScaleOptions.Default);
+
+        /// <summary>
+        /// Scale an object using the provided options.
+        /// </summary>
         public static void Apply(GameObject target, ScaleOptions options)
         {
             var ctrl = target.GetComponent<ScaleController>()
