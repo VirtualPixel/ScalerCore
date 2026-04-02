@@ -19,8 +19,8 @@ namespace ScalerCore.Patches
     {
         static void Prefix(EnemyNavMeshAgent __instance, ref float speed)
         {
-            if (EnemyPatchHelpers.TryGetScaled(__instance, out _))
-                speed *= ShrinkConfig.EnemyShrinkSpeedFactor;
+            if (EnemyPatchHelpers.TryGetScaled(__instance, out var ctrl))
+                speed *= ctrl!._options.SpeedFactor;
         }
     }
 
@@ -29,8 +29,8 @@ namespace ScalerCore.Patches
     {
         static void Prefix(EnemyNavMeshAgent __instance, ref float speed)
         {
-            if (EnemyPatchHelpers.TryGetScaled(__instance, out _))
-                speed *= ShrinkConfig.EnemyShrinkSpeedFactor;
+            if (EnemyPatchHelpers.TryGetScaled(__instance, out var ctrl))
+                speed *= ctrl!._options.SpeedFactor;
         }
     }
 
@@ -49,7 +49,7 @@ namespace ScalerCore.Patches
             if (!player) return;
 
             float dist = Vector3.Distance(__instance.feetTransform.position, player.transform.position);
-            if (dist <= ShrinkConfig.Factor * 4f) return;
+            if (dist <= ctrl._options.Factor * 4f) return;
 
             __instance.enemy?.NavMeshAgent.SetDestination(player.transform.position);
         }
@@ -74,10 +74,10 @@ namespace ScalerCore.Patches
             }
             if (ctrl == null || !ctrl.IsScaled) return;
             __instance.playerKill = false;
-            __instance.playerDamage = Mathf.RoundToInt(__instance.playerDamage * ShrinkConfig.Factor);
-            __instance.playerTumbleImpactHurtDamage = Mathf.RoundToInt(__instance.playerTumbleImpactHurtDamage * ShrinkConfig.Factor);
-            __instance.playerTumbleForce  *= ShrinkConfig.Factor;
-            __instance.playerTumbleTorque *= ShrinkConfig.Factor;
+            __instance.playerDamage = Mathf.RoundToInt(__instance.playerDamage * ctrl!._options.Factor);
+            __instance.playerTumbleImpactHurtDamage = Mathf.RoundToInt(__instance.playerTumbleImpactHurtDamage * ctrl!._options.Factor);
+            __instance.playerTumbleForce  *= ctrl!._options.Factor;
+            __instance.playerTumbleTorque *= ctrl!._options.Factor;
         }
 
         static void Postfix(HurtCollider __instance, (bool playerKill, int playerDamage, int tumbleDamage, float force, float torque) __state)
