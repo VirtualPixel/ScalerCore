@@ -132,11 +132,9 @@ namespace ScalerCore.Handlers
                 state.AnimTarget           = bestVisual;
                 state.AnimOriginalScale    = state.AnimTarget.localScale;
                 state.AnimOriginalLocalPos = state.AnimTarget.localPosition;
-                Plugin.Log.LogInfo($"[SC]   AnimTarget='{bestVisual.gameObject.name}'  renderers={bestRenderers}  scale={state.AnimOriginalScale}");
             }
             else
             {
-                Plugin.Log.LogWarning($"[SC]   AnimTarget NOT FOUND for {ep.gameObject.name}");
             }
 
             state.NavAgent  = ep.GetComponentInChildren<EnemyNavMeshAgent>();

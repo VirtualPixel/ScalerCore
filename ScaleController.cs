@@ -30,6 +30,16 @@ namespace ScalerCore
         public Vector3 OriginalScale { get; internal set; }
         public bool    IsScaled        { get; private set; }
 
+        /// <summary>
+        /// The type of object this controller is scaling.
+        /// External mods can use this to vary behavior per target type.
+        /// </summary>
+        public ScaleTargets TargetType =>
+            Handler is Handlers.PlayerHandler   ? ScaleTargets.Players   :
+            Handler is Handlers.EnemyHandler     ? ScaleTargets.Enemies   :
+            Handler is Handlers.ItemHandler      ? ScaleTargets.Items     :
+                                                   ScaleTargets.Valuables;
+
         // Handler resolved once in Start via ScaleHandlerRegistry.
         internal IScaleHandler? Handler;
         internal object? HandlerState;

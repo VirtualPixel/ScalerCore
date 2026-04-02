@@ -2,6 +2,13 @@
 
 ## 0.3.0
 
+### API changes
+- ScaleManager.Apply() now takes a ScaleOptions struct — per-call config replaces global ShrinkConfig
+- Added ScaleTargets flags enum for filtering what object types can be scaled
+- Added ScaleController.TargetType for external mods to check what kind of object a controller manages
+- Removed ShrinkConfig and ScaleFactor (replaced by ScaleOptions)
+- Added ScaleOptions.InvertedMode (reserved for future use)
+
 ### Bug fixes
 - Fixed players in tumble/object mode (Q) not being shrinkable by guns
 - ScaleManager API now resolves PlayerShrinkLink when target GO doesn't have ScaleController directly
