@@ -171,6 +171,7 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as
 | `AllowedTargets` | `All` | Flags: `Players`, `Enemies`, `Items`, `Valuables`, `All` |
 | `InvertedMode` | `false` | If true, scaled state is the default — bonk temporarily grows back |
 | `SuppressValueDropExpand` | `false` | If true, valuables won't expand when damaged while scaled (for cart mods) |
+| `PreserveMass` | `false` | If true, rigidbody mass stays at original value while scaled (for cart mods) |
 
 ### ScaleTargets
 

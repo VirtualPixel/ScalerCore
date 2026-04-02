@@ -6,6 +6,7 @@
 - Added `SuppressValueDropExpand` option to ScaleOptions — when true, valuables won't expand on damage while scaled. Essential for cart mods where items bump into each other constantly.
 - Added `ScaleManager.ApplyIfNotScaled()` — scales only if not already scaled, no-op otherwise. Safe to call every frame from continuous triggers like cart enter hooks.
 - Added `ScaleManager.GetController()` — returns the ScaleController for a game object, resolving through PlayerShrinkLink.
+- Added `PreserveMass` option to ScaleOptions — when true, rigidbody mass stays at its original value while scaled. Cart mods can shrink items visually without affecting how heavy the cart feels.
 
 ## 0.3.0
 

@@ -257,7 +257,7 @@ namespace ScalerCore.Handlers
         {
             // Game code overrides rb.mass (EnemyRigidbody.stunMassOverride, etc.).
             // Re-enforce our target mass every frame while shrunken.
-            if (ctrl._rb != null)
+            if (ctrl._rb != null && !ctrl._options.PreserveMass)
             {
                 float wanted = Mathf.Clamp(ctrl._originalMass * ctrl._options.Factor, 0.5f, ctrl._options.MassCap);
                 if (Mathf.Abs(ctrl._rb.mass - wanted) > 0.001f)

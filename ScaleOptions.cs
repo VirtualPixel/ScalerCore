@@ -64,6 +64,13 @@ namespace ScalerCore
         public bool SuppressValueDropExpand;
 
         /// <summary>
+        /// If true, rigidbody mass stays at its original value while scaled.
+        /// Useful for cart mods where items should weigh the same regardless of visual size.
+        /// Default: false (mass scales with factor, clamped by MassCap).
+        /// </summary>
+        public bool PreserveMass;
+
+        /// <summary>
         /// Default options matching current ShrinkerGun behavior.
         /// Use this as a starting point and override fields as needed.
         /// </summary>
@@ -81,6 +88,7 @@ namespace ScalerCore
             AllowedTargets            = ScaleTargets.All,
             InvertedMode              = false,
             SuppressValueDropExpand   = false,
+            PreserveMass              = false,
         };
     }
 }

@@ -318,7 +318,7 @@ namespace ScalerCore
                 ApplyScale(newTarget);
                 if (_roomVolumeCheck != null)
                     _roomVolumeCheck.currentSize = _originalRoomVolumeSize * rf;
-                if (_rb != null && !_isItem)
+                if (_rb != null && !_isItem && !_options.PreserveMass)
                     _rb.mass = Mathf.Clamp(_originalMass * rf, 0.5f, _options.MassCap);
                 if (_networkPV != null && PhotonNetwork.InRoom)
                     _networkPV.RPC(nameof(RPC_Shrink), RpcTarget.Others, newTarget);
@@ -374,7 +374,7 @@ namespace ScalerCore
                 // Items: keep original mass. Enemies/valuables: clamp between 0.5 and cap.
                 // The grab spring divides force by mass (PhysGrabObject line 788), so mass
                 // below ~0.5 causes violent oscillation when held.
-                if (!_isItem)
+                if (!_isItem && !_options.PreserveMass)
                     _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, _options.MassCap);
                 Plugin.Log.LogInfo($"[SC]   mass {_originalMass:F3} → {_rb.mass:F3}  (cap={_options.MassCap:F2}  originalMass locked at {_originalMass:F3})");
             }
@@ -518,7 +518,7 @@ namespace ScalerCore
             Plugin.Log.LogInfo($"[SC] RPC_Shrink RECV  {_displayName}  target={target}");
             IsScaled = true;
             Scaled.Add(this);
-            if (_rb != null && !_isItem) _rb.mass = Mathf.Clamp(_originalMass * _options.Factor, 0.5f, _options.MassCap);
+            if (_rb != null && !_isItem && !_options.PreserveMass) _rb.mass = Mathf.Clamp(_originalMass * _options.Factor, 0.5f, _options.MassCap);
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize * _options.Factor;
             ApplyScale(target);
             SetForceGrabPoint(false);
