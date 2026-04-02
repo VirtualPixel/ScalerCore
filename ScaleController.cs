@@ -31,8 +31,7 @@ namespace ScalerCore
         public bool    IsScaled        { get; private set; }
 
         /// <summary>
-        /// The type of object this controller is scaling.
-        /// External mods can use this to vary behavior per target type.
+        /// What kind of object this controller is on (player, enemy, item, valuable).
         /// </summary>
         public ScaleTargets TargetType =>
             Handler is Handlers.PlayerHandler   ? ScaleTargets.Players   :
@@ -66,8 +65,8 @@ namespace ScalerCore
         // Cross-cutting item effect scaling state — managed by ItemHandler static utilities.
         internal List<ItemHandler.ScaledField>? _scaledItemFields;
 
-        // Challenge mode: tracks that this controller was shrunk with InvertedMode.
-        // Persists across expand/shrink cycles so bonk can re-shrink after temporary grow.
+        // True when this controller was shrunk with InvertedMode.
+        // Stays set across expand/shrink so bonk knows to re-shrink.
         internal bool _invertedActive;
 
         internal Vector3    _target;

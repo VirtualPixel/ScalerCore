@@ -51,9 +51,8 @@ namespace ScalerCore
         public ScaleTargets AllowedTargets;
 
         /// <summary>
-        /// If true, scaled state is the new baseline.
-        /// Bonk/damage temporarily restores to original; timer shrinks back down.
-        /// Reserved for future use (shrink grenade).
+        /// If true, shrunken is the default state.
+        /// Bonk/damage temporarily grows back; timer re-shrinks.
         /// </summary>
         public bool InvertedMode;
 
