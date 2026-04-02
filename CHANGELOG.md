@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+### New
+- Added `SuppressValueDropExpand` option to ScaleOptions — when true, valuables won't expand on damage while scaled. Essential for cart mods where items bump into each other constantly.
+
 ## 0.3.0
 
 ### New

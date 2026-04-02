@@ -57,6 +57,13 @@ namespace ScalerCore
         public bool InvertedMode;
 
         /// <summary>
+        /// If true, valuables won't expand when they take damage while scaled.
+        /// Useful for cart mods where items bump into each other constantly.
+        /// Default: false (value-drop detection triggers bonk expand).
+        /// </summary>
+        public bool SuppressValueDropExpand;
+
+        /// <summary>
         /// Default options matching current ShrinkerGun behavior.
         /// Use this as a starting point and override fields as needed.
         /// </summary>
@@ -71,8 +78,9 @@ namespace ScalerCore
             DamageMultiplier      = 0.1f,
             AnimSpeedMultiplier   = 1.5f,
             FootstepPitchMultiplier = 1.5f,
-            AllowedTargets        = ScaleTargets.All,
-            InvertedMode          = false,
+            AllowedTargets            = ScaleTargets.All,
+            InvertedMode              = false,
+            SuppressValueDropExpand   = false,
         };
     }
 }

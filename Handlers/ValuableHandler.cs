@@ -50,6 +50,7 @@ namespace ScalerCore.Handlers
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
+            if (ctrl._options.SuppressValueDropExpand) return;
 
             float currentValue = state.ValuableObject.dollarValueCurrent;
             if (ctrl._bonkImmuneTimer > 0f)
