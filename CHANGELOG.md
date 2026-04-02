@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+### Bug fixes
+- Fixed players in tumble/object mode (Q) not being shrinkable by guns
+- ScaleManager API now resolves PlayerShrinkLink when target GO doesn't have ScaleController directly
+
 ## 0.2.0
 
 ### Bug fixes

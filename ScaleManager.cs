@@ -15,7 +15,8 @@ namespace ScalerCore
         /// </summary>
         public static void Apply(GameObject target, float factor = 0)
         {
-            var ctrl = target.GetComponent<ScaleController>();
+            var ctrl = target.GetComponent<ScaleController>()
+                    ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
             if (ctrl == null) return;
             ctrl.DispatchShrink();
         }
@@ -25,7 +26,8 @@ namespace ScalerCore
         /// </summary>
         public static void Restore(GameObject target)
         {
-            var ctrl = target.GetComponent<ScaleController>();
+            var ctrl = target.GetComponent<ScaleController>()
+                    ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
             if (ctrl == null) return;
             ctrl.DispatchExpand();
         }
@@ -35,7 +37,8 @@ namespace ScalerCore
         /// </summary>
         public static void RestoreImmediate(GameObject target)
         {
-            var ctrl = target.GetComponent<ScaleController>();
+            var ctrl = target.GetComponent<ScaleController>()
+                    ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
             if (ctrl == null) return;
             ctrl.DispatchExpandNow();
         }
@@ -45,7 +48,8 @@ namespace ScalerCore
         /// </summary>
         public static bool IsScaled(GameObject target)
         {
-            var ctrl = target.GetComponent<ScaleController>();
+            var ctrl = target.GetComponent<ScaleController>()
+                    ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
             return ctrl != null && ctrl.IsScaled;
         }
 

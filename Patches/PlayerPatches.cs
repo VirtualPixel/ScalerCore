@@ -8,6 +8,34 @@ using UnityEngine.SocialPlatforms;
 
 namespace ScalerCore
 {
+    // --- tumble link: attach PlayerShrinkLink when tumble GO is created ---
+    // PlayerAvatar.tumble is null at PlayerHandler.Setup() time; the tumble GO
+    // is instantiated later in LevelGenerator.PlayerSpawn → PlayerTumble.SetupRPC.
+
+    [HarmonyPatch(typeof(PlayerTumble), "SetupDone")]
+    internal static class PlayerTumbleLinkPatch
+    {
+        static void Postfix(PlayerTumble __instance)
+        {
+            var ctrl = __instance.playerAvatar?.GetComponent<ScaleController>();
+            if (ctrl == null) return;
+
+            // Link the tumble GO itself and every child collider so any
+            // raycast or overlap hit can resolve to the ScaleController.
+            AttachLink(__instance.gameObject, ctrl);
+            foreach (var col in __instance.GetComponentsInChildren<Collider>(true))
+                AttachLink(col.gameObject, ctrl);
+
+            Plugin.Log.LogInfo($"[SC] PlayerShrinkLink (tumble) attached → {__instance.gameObject.name}  avatar={ctrl.gameObject.name}");
+        }
+
+        static void AttachLink(GameObject go, ScaleController ctrl)
+        {
+            var link = go.GetComponent<PlayerShrinkLink>() ?? go.AddComponent<PlayerShrinkLink>();
+            link.Controller = ctrl;
+        }
+    }
+
     [HarmonyPatch(typeof(PlayerHealth), nameof(PlayerHealth.Hurt))]
     internal static class PlayerBonkPatch
     {

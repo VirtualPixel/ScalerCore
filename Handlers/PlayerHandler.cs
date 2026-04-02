@@ -118,6 +118,10 @@ namespace ScalerCore.Handlers
             else
                 Plugin.Log.LogWarning($"[SC] PlayerShrinkLink SKIP  pac={pac != null}  collisionXform={(pac?.CollisionTransform != null)}  avatar={ctrl.gameObject.name}");
 
+            // Tumble link is attached lazily via PlayerTumbleLinkPatch (PlayerPatches.cs)
+            // because pa.tumble is null at this point — the tumble GO hasn't been
+            // instantiated yet.
+
             ctrl.HandlerState = state;
         }
 
