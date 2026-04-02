@@ -91,7 +91,7 @@ namespace ScalerCore
             // Shrunken cart being pushed by a full-size player.
             var cartCtrl = cart.GetComponent<ScaleController>();
             if (cartCtrl != null && cartCtrl.IsScaled)
-                return d * Mathf.Lerp(ShrinkConfig.Factor, 1f, 0.15f);
+                return d * Mathf.Lerp(cartCtrl._options.Factor, 1f, 0.15f);
 
             // Full-size cart being pushed by a shrunken player.
             // Check the ACTUAL grabbing players, not PhysGrabber.instance (which is
@@ -100,7 +100,7 @@ namespace ScalerCore
             if (grabber == null) return d;
             var ctrl = grabber.playerAvatar.GetComponent<ScaleController>();
             if (ctrl != null && ctrl.IsScaled)
-                return d * Mathf.Lerp(1f, ShrinkConfig.Factor, 0.15f);
+                return d * Mathf.Lerp(1f, ctrl._options.Factor, 0.15f);
 
             return d;
         }
@@ -157,7 +157,7 @@ namespace ScalerCore
         {
             var ctrl = __instance.GetComponent<ScaleController>();
             if (ctrl != null && ctrl.IsScaled)
-                ScaleController.FootstepPitchMult = ShrinkConfig.ShrunkFootstepPitchMult;
+                ScaleController.FootstepPitchMult = ctrl._options.FootstepPitchMultiplier;
         }
 
         static void Postfix()
