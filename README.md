@@ -23,8 +23,14 @@ ScalerCore automatically attaches `ScaleController` components to all enemies, p
 ```csharp
 using ScalerCore;
 
-// Shrink something (uses the configured ShrinkFactor, default 0.4)
+// Shrink with default options (40% scale)
 ScaleManager.Apply(targetGameObject);
+
+// Shrink with custom options
+var opts = ScaleOptions.Default;
+opts.Factor = 0.5f;
+opts.Duration = 60f;
+ScaleManager.Apply(targetGameObject, opts);
 
 // Restore with animation
 ScaleManager.Restore(targetGameObject);
@@ -101,7 +107,8 @@ The registry resolves handlers by checking predicates in descending priority ord
 
 | Method | Description |
 |--------|-------------|
-| `Apply(GameObject target, float factor = 0)` | Scale the target down. Factor param is reserved -- currently uses `ShrinkConfig.Factor`. |
+| `Apply(GameObject target)` | Scale with default options (ScaleOptions.Default). |
+| `Apply(GameObject target, ScaleOptions options)` | Scale with custom options. Same factor on an already-scaled target toggles it back; different factor rescales. |
 | `Restore(GameObject target)` | Restore with smooth animation. |
 | `RestoreImmediate(GameObject target)` | Restore instantly (respects bonk immunity timer). |
 | `IsScaled(GameObject target)` | Returns true if the object is currently scaled. |
@@ -115,7 +122,9 @@ Attached automatically to game objects. Key public members:
 |--------|-------------|
 | `IsScaled` | Whether the object is currently scaled. |
 | `OriginalScale` | The object's scale before any modification. |
+| `TargetType` | What kind of object this is (`ScaleTargets.Players`, `.Enemies`, etc.). |
 | `ScaleTarget` | Override in handler's `Setup` to scale a different transform than the controller's. |
+| `AllowManualScale` | Static bool — gates F9/F10 debug key requests. Host sets it. |
 | `RequestBonkExpand()` | Client-safe expand request (sends RPC to host if called on non-host). |
 | `RequestManualExpand()` | Manual expand (skips bonk immunity). |
 | `RequestManualShrink()` | Manual shrink request. |
@@ -141,29 +150,43 @@ public interface IScaleHandler
 | `Register(IScaleHandler handler, Func<GameObject, bool> predicate, int priority = 0)` | Register a handler. Higher priority wins. Built-ins use priority 0. |
 | `Resolve(GameObject target)` | Returns the highest-priority matching handler, or null. |
 
-### ScaleFactor / ScaleOptions
+### ScaleOptions
 
-`ScaleFactor` is a thin float wrapper with named presets (`ScaleFactor.Shrink`, `.Grow`, `.Normal`). `ScaleOptions` groups per-type settings (duration, animation speed, bonk immunity, etc.) with presets for Enemy, Player, Valuable, and Item.
+Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as a starting point and override what you need.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `Factor` | `0.4` | Scale multiplier (0.4 = 40% of original size) |
+| `Duration` | `0` | Seconds until auto-restore (0 = permanent) |
+| `Speed` | `2.0` | Scale animation speed |
+| `BonkImmuneDuration` | `5.0` | Grace period after scaling before damage can restore |
+| `MassCap` | `5.0` | Max rigidbody mass while scaled |
+| `SpeedFactor` | `0.65` | Enemy NavMesh speed multiplier |
+| `DamageMultiplier` | `0.1` | Damage dealt by scaled enemies |
+| `AnimSpeedMultiplier` | `1.5` | Player animation speed while scaled |
+| `FootstepPitchMultiplier` | `1.5` | Player footstep pitch while scaled |
+| `AllowedTargets` | `All` | Flags: `Players`, `Enemies`, `Items`, `Valuables`, `All` |
+| `InvertedMode` | `false` | If true, scaled state is the default — bonk temporarily grows back |
+
+### ScaleTargets
+
+Flags enum for filtering what `Apply()` affects:
+
+```csharp
+var opts = ScaleOptions.Default;
+opts.AllowedTargets = ScaleTargets.Enemies | ScaleTargets.Valuables;
+ScaleManager.Apply(target, opts); // skips players and items
+```
 
 ## Configuration
 
-All values are configurable via BepInEx config (`ScalerCore.cfg`). These are the defaults:
+ScalerCore has one user-facing setting in `ScalerCore.cfg`:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ShrinkFactor` | `0.4` | Scale multiplier (0.4 = 40% of original size) |
-| `ShrinkSpeed` | `2.0` | Scale animation speed |
-| `EnemyDamageMultiplier` | `0.1` | Damage dealt by shrunken enemies (10% of normal) |
-| `EnemyShrinkDuration` | `120` | Seconds until enemy auto-restores (0 = never) |
-| `ValuableShrinkDuration` | `0` | Seconds until valuable auto-restores (0 = never) |
-| `ItemShrinkDuration` | `0` | Seconds until item auto-restores (0 = never) |
-| `PlayerShrinkDuration` | `0` | Seconds until player auto-restores (0 = never) |
-| `EnemyBonkImmuneDuration` | `5` | Grace period after shrinking before damage can restore |
-| `ValuableBonkImmuneDuration` | `5` | Grace period for valuables |
-| `EnemyShrinkSpeedFactor` | `0.65` | Movement speed multiplier for shrunken enemies |
-| `ShrunkMassCap` | `5.0` | Max rigidbody mass while shrunken |
-| `ShrunkAnimSpeedMult` | `1.5` | Player animation speed while shrunken |
-| `ShrunkFootstepPitchMult` | `1.5` | Player footstep pitch while shrunken |
+| `ShrinkChallengeMode` | `false` | Players start shrunken. Guns temporarily grow you; damage shrinks you back. Can be toggled live. |
+
+All scaling behavior (factor, speed, duration, etc.) is controlled per-call via `ScaleOptions` -- consuming mods expose whatever settings make sense for them.
 
 ## What ScalerCore Handles
 
@@ -212,7 +235,7 @@ For all types:
 
 - Hearthugger has visual/grab misalignment when shrunken (cosmetic, gameplay unaffected)
 - Some untested enemy types may float or clip into the ground while shrunken
-- Grab strength/range values are still being tuned for the best feel
+- Single doors break off their hinges when shrunken (drawers, safe doors, and double doors stay attached)
 - Non-host grab strength may not scale correctly in multiplayer (physics runs on host)
 - Early access 0.3.0 -- API may evolve, pin your dependency version
 
@@ -223,4 +246,4 @@ For all types:
 
 ## Reference Implementation
 
-[ShrinkerGun: COMPRESSOR](https://github.com/Vippy/ShrinkerGun-COMPRESSOR) is a shrink ray gun built on ScalerCore. It's a good example of how to call `ScaleManager.Apply/Restore` from a weapon mod.
+[ShrinkerGun: COMPRESSOR](https://github.com/Vippy/ShrinkerGun-COMPRESSOR) is a shrink ray gun built on ScalerCore. Shows how to build `ScaleOptions`, call `Apply`, and handle per-target-type durations.
