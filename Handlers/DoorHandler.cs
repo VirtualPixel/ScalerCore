@@ -45,10 +45,10 @@ namespace ScalerCore.Handlers
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
-            if (!ctrl.IsScaled && !ctrl._transitioning) return;
+            // Only correct during the shrink/expand animation.
+            // Once it finishes, let physics own the door so it opens/closes freely.
+            if (!ctrl._transitioning) return;
 
-            // After the scale is applied, the hinge anchor (in local space) maps to a
-            // different world position. Move the door so the hinge stays where it was.
             Vector3 currentHingeWorld = ctrl.transform.TransformPoint(state.OriginalAnchor);
             Vector3 correction = state.HingeWorldPos - currentHingeWorld;
             if (correction.sqrMagnitude > 0.0001f)
