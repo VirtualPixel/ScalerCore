@@ -233,7 +233,6 @@ For all types:
 
 ## Known Issues
 
-- Hearthugger has visual/grab misalignment when shrunken (cosmetic, gameplay unaffected)
 - Some untested enemy types may float or clip into the ground while shrunken
 - Single doors break off their hinges when shrunken (intentional — drawers, lockers, safe doors, and double doors scale normally)
 - Non-host grab strength may not scale correctly in multiplayer (physics runs on host)

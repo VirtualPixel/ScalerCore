@@ -22,6 +22,11 @@
 - Single doors now cleanly break off their hinges when shrunken instead of floating in place
 - Birthday Boy's balloons now shrink along with him
 - Enemies killed or despawned while shrunken no longer respawn at shrunken size
+- HeartHugger mesh and collision now align properly when shrunken (including when tipped)
+- HeartHugger gas pull distance scales with enemy size
+- Loom arms stay proportional when shrunken instead of stretching to full-size reach
+- Loom attack distance scales with enemy size
+- Fixed bonk expand not restoring visual scale on enemies with handler-owned scaling
 - Replaced most reflection with direct publicizer access for better performance
 - Fixed Loom (Shadow) NRE spam in EnemyShadow.HandLogic after unshrinking
 
