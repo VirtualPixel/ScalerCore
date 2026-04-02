@@ -20,9 +20,8 @@
 - ScaleManager API now resolves PlayerShrinkLink when target GO doesn't have ScaleController directly
 - Fixed Tricycle (Bella) trike mesh not scaling — rider shrank but the bike stayed full size
 
-### Known limitations
-- Some single doors shrink toward center instead of hinge — they break off when shrunken (functional, just cosmetic)
-- Drawers, safe doors, double doors, and most hinged objects work fine
+### Known behaviors
+- Single doors break off their hinges when shrunken (drawers, safe doors, and double doors stay attached)
 
 ## 0.2.0
 

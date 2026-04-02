@@ -11,19 +11,21 @@ namespace ScalerCore
         static Harmony? _harmony;
         internal static ManualLogSource Log = null!;
 
+        static ConfigEntry<bool> _challengeMode = null!;
+
         /// <summary>
         /// When true, all players start shrunken with inverted mode.
-        /// Shrink guns temporarily grow them; damage while grown shrinks back.
+        /// Reads live from config so it can be toggled without restarting.
         /// </summary>
-        internal static bool ChallengeMode;
+        internal static bool ChallengeMode => _challengeMode.Value;
 
         void Awake()
         {
             Log = Logger;
 
-            ChallengeMode = Config.Bind("Challenge", "ShrinkChallengeMode", false,
+            _challengeMode = Config.Bind("Challenge", "ShrinkChallengeMode", false,
                 "All players start shrunken. Shrink guns temporarily grow you back to full size. " +
-                "Taking damage while full size shrinks you back down. Enemies behave normally.").Value;
+                "Taking damage while full size shrinks you back down. Enemies behave normally.");
 
             _harmony = new Harmony("Vippy.ScalerCore");
             _harmony.PatchAll();
