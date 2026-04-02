@@ -5,6 +5,7 @@
 ### Bug fixes
 - Fixed players in tumble/object mode (Q) not being shrinkable by guns
 - ScaleManager API now resolves PlayerShrinkLink when target GO doesn't have ScaleController directly
+- Fixed Tricycle (Bella) trike mesh not scaling — rider shrank but the bike stayed full size
 
 ## 0.2.0
 

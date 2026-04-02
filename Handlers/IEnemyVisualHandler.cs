@@ -80,6 +80,7 @@ namespace ScalerCore.Handlers
             var sinker     = new EnemyVisuals.SinkerVisualHandler();
             var heartHug   = new EnemyVisuals.HeartHuggerVisualHandler();
             var loom       = new EnemyVisuals.LoomVisualHandler();
+            var tricycle   = new EnemyVisuals.TricycleVisualHandler();
 
             _overrides["Tumbler"]      = sinker;
             _overrides["Floater"]      = sinker;
@@ -88,6 +89,7 @@ namespace ScalerCore.Handlers
             _overrides["Elsa"]         = sinker;
             _overrides["Heart Hugger"] = heartHug;
             _overrides["Shadow"]       = loom;
+            _overrides["Tricycle"]     = tricycle;
         }
     }
 }
