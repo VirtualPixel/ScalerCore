@@ -11,13 +11,13 @@ namespace ScalerCore.Handlers
     internal class PlayerHandler : IScaleHandler
     {
   
-        /// <summary>Returns (strengthFactor, rangeFactor) for the current ShrinkConfig.</summary>
-        private static (float strength, float range) GetGrabFactors()
+        /// <summary>Returns (strengthFactor, rangeFactor) for the given scale factor.</summary>
+        private static (float strength, float range) GetGrabFactors(float factor)
         {
-            var rawStrength = ShrinkConfig.Factor * 1.5f;
-            var maxStrength = ShrinkConfig.Factor < 1.0f ? 1.0f : ShrinkConfig.MaximumStrength;
-            float strengthFactor = Mathf.Clamp(rawStrength, ShrinkConfig.MinimumStrength, maxStrength);
-            return (strengthFactor, ShrinkConfig.Factor);
+            var rawStrength = factor * 1.5f;
+            var maxStrength = factor < 1.0f ? 1.0f : 2.0f;
+            float strengthFactor = Mathf.Clamp(rawStrength, 0.6f, maxStrength);
+            return (strengthFactor, factor);
         }
 
         // Pupil override constants
@@ -137,7 +137,7 @@ namespace ScalerCore.Handlers
             // Voice pitch: apply on all clients.
             if (state.PlayerAvatar.voiceChat != null)
             {
-                float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ShrinkConfig.Factor;
+                float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
                 float pitchMult = 1f + (1f - factor) * 0.5f;
                 state.PlayerAvatar.voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 9999f);
             }
@@ -190,7 +190,7 @@ namespace ScalerCore.Handlers
             if (ctrl.IsScaled)
             {
                 var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
-                var (strengthFactor, rangeFactor) = GetGrabFactors();
+                var (strengthFactor, rangeFactor) = GetGrabFactors(ctrl._options.Factor);
 
                 // Host enforces grab stats for ALL shrunken players (physics runs on host).
                 // Non-host enforces locally via PhysGrabber.instance as a fallback.
@@ -201,7 +201,7 @@ namespace ScalerCore.Handlers
                 // (e.g. hourglass, spewer face-detach) can't permanently replace it.
                 if (state.PlayerAvatar.voiceChat != null)
                 {
-                    float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ShrinkConfig.Factor;
+                    float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
                     float pitchMult = 1f + (1f - factor) * 0.5f;
                     state.PlayerAvatar.voiceChat.overridePitchMultiplierTarget = pitchMult;
                     state.PlayerAvatar.voiceChat.overridePitchTimer = 0.2f;
@@ -266,7 +266,7 @@ namespace ScalerCore.Handlers
             if (state.MenuAvatarTransform != null && isLocal)
             {
                 var current = state.MenuAvatarTransform.localScale;
-                var target = state.MenuAvatarOriginalScale * ShrinkConfig.Factor;
+                var target = state.MenuAvatarOriginalScale * ctrl._options.Factor;
                 var speed = Time.deltaTime * 10f;
                 if (ctrl.IsScaled)
                     state.MenuAvatarTransform.localScale = Vector3.Lerp(current, target, speed);
@@ -289,7 +289,7 @@ namespace ScalerCore.Handlers
                 if (isLocal)
                 {
                     // Animation speed always applies while shrunken, regardless of expression.
-                    state.PlayerAvatar.OverrideAnimationSpeed(ShrinkConfig.ShrunkAnimSpeedMult, SpringSpeedIn, SpringSpeedOut, 9999f);
+                    state.PlayerAvatar.OverrideAnimationSpeed(ctrl._options.AnimSpeedMultiplier, SpringSpeedIn, SpringSpeedOut, 9999f);
 
                     if (!expressing)
                     {
@@ -346,7 +346,7 @@ namespace ScalerCore.Handlers
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
 
-            float f = ShrinkConfig.Factor;
+            float f = ctrl._options.Factor;
             if (CameraPosition.instance != null)
             {
                 state.OriginalCamOffset = CameraPosition.instance.playerOffset;
@@ -382,7 +382,7 @@ namespace ScalerCore.Handlers
             if (PhysGrabber.instance != null)
             {
                 var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
-                var (strengthFactor, rangeFactor) = GetGrabFactors();
+                var (strengthFactor, rangeFactor) = GetGrabFactors(ctrl._options.Factor);
 
                 state.OriginalGrabMinDist  = PhysGrabber.instance.minDistanceFromPlayer;
                 state.OriginalGrabMaxDist  = PhysGrabber.instance.maxDistanceFromPlayer;
