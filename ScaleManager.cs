@@ -1,4 +1,5 @@
 using UnityEngine;
+using ScalerCore.Handlers;
 
 namespace ScalerCore
 {
@@ -10,15 +11,23 @@ namespace ScalerCore
     public static class ScaleManager
     {
         /// <summary>
-        /// Scale an object. Gets existing ScaleController or returns if none attached.
-        /// Factor parameter reserved for future use — currently uses ShrinkConfig.Factor.
+        /// Scale an object using the provided options.
+        /// Gets existing ScaleController or returns if none attached.
+        /// Skips the target if its handler type is not included in <see cref="ScaleOptions.AllowedTargets"/>.
         /// </summary>
-        public static void Apply(GameObject target, float factor = 0)
+        public static void Apply(GameObject target, ScaleOptions options)
         {
             var ctrl = target.GetComponent<ScaleController>()
                     ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
             if (ctrl == null) return;
-            ctrl.DispatchShrink();
+
+            // Check AllowedTargets against handler type
+            if (ctrl.Handler is PlayerHandler   && (options.AllowedTargets & ScaleTargets.Players)   == 0) return;
+            if (ctrl.Handler is EnemyHandler    && (options.AllowedTargets & ScaleTargets.Enemies)   == 0) return;
+            if (ctrl.Handler is ItemHandler     && (options.AllowedTargets & ScaleTargets.Items)     == 0) return;
+            if (ctrl.Handler is ValuableHandler && (options.AllowedTargets & ScaleTargets.Valuables) == 0) return;
+
+            ctrl.DispatchShrink(options);
         }
 
         /// <summary>
