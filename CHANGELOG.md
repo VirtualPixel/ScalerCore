@@ -20,6 +20,7 @@
 - ScaleManager API now resolves PlayerShrinkLink when target GO doesn't have ScaleController directly
 - Fixed Tricycle (Bella) trike mesh not scaling — rider shrank but the bike stayed full size
 - Single doors now cleanly break off their hinges when shrunken instead of floating in place
+- Birthday Boy's balloons now shrink along with him
 - Replaced most reflection with direct publicizer access for better performance
 - Fixed Loom (Shadow) NRE spam in EnemyShadow.HandLogic after unshrinking
 

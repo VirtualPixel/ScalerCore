@@ -77,10 +77,11 @@ namespace ScalerCore.Handlers
             if (_registered) return;
             _registered = true;
 
-            var sinker     = new EnemyVisuals.SinkerVisualHandler();
-            var heartHug   = new EnemyVisuals.HeartHuggerVisualHandler();
-            var loom       = new EnemyVisuals.LoomVisualHandler();
-            var tricycle   = new EnemyVisuals.TricycleVisualHandler();
+            var sinker      = new EnemyVisuals.SinkerVisualHandler();
+            var heartHug    = new EnemyVisuals.HeartHuggerVisualHandler();
+            var loom        = new EnemyVisuals.LoomVisualHandler();
+            var tricycle    = new EnemyVisuals.TricycleVisualHandler();
+            var birthdayBoy = new EnemyVisuals.BirthdayBoyVisualHandler();
 
             _overrides["Tumbler"]      = sinker;
             _overrides["Floater"]      = sinker;
@@ -90,6 +91,7 @@ namespace ScalerCore.Handlers
             _overrides["Heart Hugger"] = heartHug;
             _overrides["Shadow"]       = loom;
             _overrides["Tricycle"]     = tricycle;
+            _overrides["Birthday boy"] = birthdayBoy;
         }
     }
 }
