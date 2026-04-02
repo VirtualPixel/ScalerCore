@@ -7,9 +7,9 @@ namespace ScalerCore.Handlers.EnemyVisuals
     /// <summary>
     /// Visual handler for Loom (Shadow enemy).
     /// Scales the mesh and adjusts attack distances so the Loom behaves
-    /// proportionally when shrunken. Arm reach is handled by a Harmony patch
-    /// on UpdateHandPositionTo (see EnemyPatches) since the game's IK runs
-    /// during Update before our LateUpdate.
+    /// proportionally when shrunken. Arm visuals remain a known limitation —
+    /// the game's IK solver (BotSystemSpringPoseAnimator) sets bone world
+    /// positions from cached chain lengths that conflict with parent scaling.
     /// Uses reflection for EnemyShadow fields — direct publicizer access
     /// causes NREs in the game's hand logic after shrink/unshrink cycles.
     /// </summary>
@@ -68,11 +68,9 @@ namespace ScalerCore.Handlers.EnemyVisuals
             if (state.AnimTarget == null) return;
             if (visualState is not LoomState loom) return;
 
-            // Scale the mesh
             state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
 
-            // Arm IK targets are scaled by SpringPoseStretchPatch in EnemyPatches.
-            // Scale attack distances so the Loom doesn't reach from full distance
+            // Scale attack distances so the Loom only reaches from proportional range
             if (loom.Shadow != null)
             {
                 if (_handMoveDistField != null)
@@ -90,7 +88,9 @@ namespace ScalerCore.Handlers.EnemyVisuals
                 state.AnimTarget.localPosition = state.AnimOriginalLocalPos;
             }
 
-            if (visualState is LoomState loom && loom.Shadow != null)
+            if (visualState is not LoomState loom) return;
+
+            if (loom.Shadow != null)
             {
                 if (_handMoveDistField != null)
                     _handMoveDistField.SetValue(loom.Shadow, loom.OrigHandMoveDist);
