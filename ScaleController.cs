@@ -25,6 +25,11 @@ namespace ScalerCore
         // Sound.Play Postfix reads this to pitch-shift footsteps for shrunken players.
         internal static float FootstepPitchMult = 1f;
 
+        // Gate for manual shrink/expand requests (F9/F10 debug keys).
+        // Consuming mods set this to control whether debug keys are allowed.
+        // Checked on the host when processing RPC requests.
+        public static bool AllowManualScale = true;
+
         public Transform? ScaleTarget; // visual root to scale; null = own transform
 
         public Vector3 OriginalScale { get; internal set; }
@@ -568,6 +573,7 @@ namespace ScalerCore
             if (IsScaled) return;
             if (SemiFunc.IsMasterClientOrSingleplayer())
             {
+                if (!AllowManualScale) return;
                 DispatchShrink(ScaleOptions.Default);
             }
             else if (_networkPV != null && _networkPV.IsMine && PhotonNetwork.InRoom)
@@ -580,6 +586,7 @@ namespace ScalerCore
         void RPC_RequestShrink()
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            if (!AllowManualScale) return;
             if (IsScaled) return;
             DispatchShrink(ScaleOptions.Default);
         }
@@ -589,6 +596,7 @@ namespace ScalerCore
             if (!IsScaled) return;
             if (SemiFunc.IsMasterClientOrSingleplayer())
             {
+                if (!AllowManualScale) return;
                 DispatchExpand();
             }
             else if (_networkPV != null && _networkPV.IsMine && PhotonNetwork.InRoom)
@@ -603,9 +611,14 @@ namespace ScalerCore
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             if (!IsScaled) return;
             if (checkImmunity)
+            {
                 DispatchExpandNow(); // respects _bonkImmuneTimer
+            }
             else
+            {
+                if (!AllowManualScale) return;
                 DispatchExpand();    // no immunity check — manual request
+            }
         }
 
         // --- level/extraction cleanup ---
