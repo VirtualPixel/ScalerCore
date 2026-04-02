@@ -6,7 +6,7 @@ If you're building a mod that changes the size of things (shrink rays, growth po
 
 **This is a library, not a standalone mod.** End users don't need to interact with it directly. If you're a player, you probably got here because a mod like [ShrinkerGun: COMPRESSOR](https://thunderstore.io/c/repo/p/Vippy/ShrinkerGun/) depends on it.
 
-> **v0.3.0 -- Early Access.** The API surface is small and may change. Pin your dependency version.
+> **For modders building size-changing mechanics.** If you're looking for a shrink ray, check out [ShrinkerGun: COMPRESSOR](https://thunderstore.io/c/repo/p/Vippy/ShrinkerGun/) which is built on ScalerCore.
 
 ## Installation
 
