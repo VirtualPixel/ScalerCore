@@ -109,6 +109,9 @@ The registry resolves handlers by checking predicates in descending priority ord
 |--------|-------------|
 | `Apply(GameObject target)` | Scale with default options (ScaleOptions.Default). |
 | `Apply(GameObject target, ScaleOptions options)` | Scale with custom options. Same factor on an already-scaled target toggles it back; different factor rescales. |
+| `ApplyIfNotScaled(GameObject target)` | Scale only if not already scaled. No-op if already scaled. Returns true if scaling was applied. |
+| `ApplyIfNotScaled(GameObject target, ScaleOptions options)` | Same with custom options. Ideal for cart mods and continuous triggers. |
+| `GetController(GameObject target)` | Get the ScaleController for a game object (resolves through PlayerShrinkLink). Returns null if none. |
 | `Restore(GameObject target)` | Restore with smooth animation. |
 | `RestoreImmediate(GameObject target)` | Restore instantly (respects bonk immunity timer). |
 | `IsScaled(GameObject target)` | Returns true if the object is currently scaled. |

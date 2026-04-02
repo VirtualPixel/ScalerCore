@@ -22,8 +22,7 @@ namespace ScalerCore
         /// </summary>
         public static void Apply(GameObject target, ScaleOptions options)
         {
-            var ctrl = target.GetComponent<ScaleController>()
-                    ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
+            var ctrl = GetController(target);
             if (ctrl == null) return;
 
             // Check AllowedTargets against handler type
@@ -36,12 +35,47 @@ namespace ScalerCore
         }
 
         /// <summary>
+        /// Scale an object only if it isn't already scaled.
+        /// Unlike Apply(), this won't toggle or rescale — it's a no-op if the object is already scaled.
+        /// Ideal for cart mods and other continuous triggers that fire every frame.
+        /// </summary>
+        public static bool ApplyIfNotScaled(GameObject target) => ApplyIfNotScaled(target, ScaleOptions.Default);
+
+        /// <summary>
+        /// Scale an object only if it isn't already scaled.
+        /// Returns true if the object was scaled, false if it was already scaled or has no controller.
+        /// </summary>
+        public static bool ApplyIfNotScaled(GameObject target, ScaleOptions options)
+        {
+            var ctrl = GetController(target);
+            if (ctrl == null || ctrl.IsScaled) return false;
+
+            // Check AllowedTargets
+            if (ctrl.Handler is PlayerHandler   && (options.AllowedTargets & ScaleTargets.Players)   == 0) return false;
+            if (ctrl.Handler is EnemyHandler    && (options.AllowedTargets & ScaleTargets.Enemies)   == 0) return false;
+            if (ctrl.Handler is ItemHandler     && (options.AllowedTargets & ScaleTargets.Items)     == 0) return false;
+            if (ctrl.Handler is ValuableHandler && (options.AllowedTargets & ScaleTargets.Valuables) == 0) return false;
+
+            ctrl.DispatchShrink(options);
+            return true;
+        }
+
+        /// <summary>
+        /// Get the ScaleController for a game object, resolving through PlayerShrinkLink if needed.
+        /// Returns null if no controller is attached.
+        /// </summary>
+        public static ScaleController? GetController(GameObject target)
+        {
+            return target.GetComponent<ScaleController>()
+                ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
+        }
+
+        /// <summary>
         /// Restore with animation (timer expiry, gun toggle).
         /// </summary>
         public static void Restore(GameObject target)
         {
-            var ctrl = target.GetComponent<ScaleController>()
-                    ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
+            var ctrl = GetController(target);
             if (ctrl == null) return;
             ctrl.DispatchExpand();
         }
@@ -51,8 +85,7 @@ namespace ScalerCore
         /// </summary>
         public static void RestoreImmediate(GameObject target)
         {
-            var ctrl = target.GetComponent<ScaleController>()
-                    ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
+            var ctrl = GetController(target);
             if (ctrl == null) return;
             ctrl.DispatchExpandNow();
         }
@@ -62,8 +95,7 @@ namespace ScalerCore
         /// </summary>
         public static bool IsScaled(GameObject target)
         {
-            var ctrl = target.GetComponent<ScaleController>()
-                    ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
+            var ctrl = GetController(target);
             return ctrl != null && ctrl.IsScaled;
         }
 
