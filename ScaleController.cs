@@ -66,6 +66,10 @@ namespace ScalerCore
         // Cross-cutting item effect scaling state — managed by ItemHandler static utilities.
         internal List<ItemHandler.ScaledField>? _scaledItemFields;
 
+        // Challenge mode: tracks that this controller was shrunk with InvertedMode.
+        // Persists across expand/shrink cycles so bonk can re-shrink after temporary grow.
+        internal bool _invertedActive;
+
         internal Vector3    _target;
         internal Vector3    _animScale;  // tracks intended scale independently of _t.localScale
         internal bool       _transitioning;
@@ -150,6 +154,16 @@ namespace ScalerCore
                 $"  mass={(_rb != null ? _rb.mass.ToString("F2") : "none")}" +
                 $"  animTarget={(enemyState?.AnimTarget != null ? enemyState.AnimTarget.gameObject.name : "NONE")}" +
                 $"  navAgent={(enemyState?.NavAgent != null ? "yes" : "no")}");
+
+            // Challenge mode: auto-shrink players at spawn.
+            if (Plugin.ChallengeMode && Handler is PlayerHandler)
+            {
+                var opts = ScaleOptions.Default;
+                opts.InvertedMode = true;
+                opts.Duration = 0f; // permanent
+                DispatchShrink(opts);
+                Plugin.Log.LogInfo($"[SC] Challenge mode: auto-shrunk {_displayName}");
+            }
         }
 
         void Update()
@@ -283,6 +297,7 @@ namespace ScalerCore
             if (options.Factor <= 0f) options.Factor = ScaleOptions.Default.Factor;
             if (options.Speed  <= 0f) options.Speed  = ScaleOptions.Default.Speed;
             _options = options;
+            _invertedActive = _options.InvertedMode;
             IsScaled = true;
             _shrinkTimer = _options.Duration;
             if (_shrinkTimer < 0f) _shrinkTimer = 0f;
@@ -532,6 +547,21 @@ namespace ScalerCore
             }
         }
 
+        // Called by PlayerBonkPatch when an inverted player takes damage while at full size.
+        // Re-shrinks them back to their home (small) state.
+        public void RequestInvertedReshrink()
+        {
+            if (IsScaled || !_invertedActive) return;
+            if (SemiFunc.IsMasterClientOrSingleplayer())
+            {
+                DispatchShrink(_options);
+            }
+            else if (_networkPV != null && _networkPV.IsMine && PhotonNetwork.InRoom)
+            {
+                _networkPV.RPC(nameof(RPC_RequestShrink), RpcTarget.MasterClient);
+            }
+        }
+
         // Called when the local player presses F10 to manually unshrink.
         // Skips bonk immunity — manual input should always work.
         public void RequestManualShrink()
@@ -596,12 +626,32 @@ namespace ScalerCore
                 ctrl.Handler?.OnRestore(ctrl, isBonk: false);
 
                 ctrl.IsScaled = false;
+                ctrl._invertedActive = false;
                 ctrl._transitioning = false;
                 ctrl._target    = ctrl.OriginalScale;
                 ctrl._animScale = ctrl.OriginalScale;
                 ctrl._t.localScale = ctrl.OriginalScale;
             }
             Scaled.Clear();
+
+            // Challenge mode: re-shrink all players after cleanup.
+            if (Plugin.ChallengeMode)
+                ReapplyChallengeMode();
+        }
+
+        static void ReapplyChallengeMode()
+        {
+            if (GameDirector.instance?.PlayerList == null) return;
+            var opts = ScaleOptions.Default;
+            opts.InvertedMode = true;
+            opts.Duration = 0f;
+            foreach (var player in GameDirector.instance.PlayerList)
+            {
+                if (player == null || player.isDisabled) continue;
+                var ctrl = player.GetComponent<ScaleController>();
+                if (ctrl == null) continue;
+                ctrl.DispatchShrink(opts);
+            }
         }
 
         // Re-register after joining so Photon's internal initialization (which may rebuild the

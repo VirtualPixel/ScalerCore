@@ -43,8 +43,19 @@ namespace ScalerCore
         {
             var ctrl = __instance.GetComponentInParent<ScaleController>()
                     ?? __instance.GetComponentInChildren<ScaleController>();
-            if (ctrl == null || !ctrl.IsScaled) return;
-            ctrl.RequestBonkExpand();
+            if (ctrl == null) return;
+
+            if (ctrl.IsScaled)
+            {
+                // Normal: bonk expands. Inverted at home (small): bonk does nothing.
+                if (!ctrl._invertedActive)
+                    ctrl.RequestBonkExpand();
+            }
+            else if (ctrl._invertedActive)
+            {
+                // Inverted, currently full size (temporarily grown): bonk re-shrinks.
+                ctrl.RequestInvertedReshrink();
+            }
         }
     }
 
