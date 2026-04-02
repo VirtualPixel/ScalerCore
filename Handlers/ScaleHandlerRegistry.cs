@@ -29,8 +29,7 @@ namespace ScalerCore.Handlers
         }
 
         /// <summary>
-        /// Resolve which handler applies to a game object. Returns null if no handler matches
-        /// (e.g. doors use base ScaleController only).
+        /// Resolve which handler applies to a game object. Returns null if no handler matches.
         /// </summary>
         public static IScaleHandler? Resolve(GameObject target)
         {
@@ -57,6 +56,9 @@ namespace ScalerCore.Handlers
             // Items: has ItemAttributes but NOT ValuableObject (valuables matched above with higher list position).
             Register(new ItemHandler(),
                 go => go.GetComponent<ItemAttributes>() != null && go.GetComponent<ValuableObject>() == null, 0);
+            // Doors: has PhysGrabHinge. Breaks hinge cleanly for doors that can't scale to pivot.
+            Register(new DoorHandler(),
+                go => go.GetComponent<PhysGrabHinge>() != null, 0);
         }
     }
 }

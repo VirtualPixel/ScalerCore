@@ -1,7 +1,4 @@
-using System.Reflection;
-using HarmonyLib;
 using UnityEngine;
-using UnityEngine.AI;
 
 namespace ScalerCore.Handlers
 {
@@ -12,11 +9,6 @@ namespace ScalerCore.Handlers
     /// </summary>
     internal class EnemyHandler : IScaleHandler
     {
-        // NavMesh speed control — only enemies use these.
-        internal static readonly FieldInfo _navDefaultSpeedField =
-            AccessTools.Field(typeof(EnemyNavMeshAgent), "DefaultSpeed");
-        internal static readonly FieldInfo _navAgentField =
-            AccessTools.Field(typeof(EnemyNavMeshAgent), "Agent");
 
         /// <summary>
         /// Holds all enemy-specific component references and saved originals.
@@ -172,15 +164,15 @@ namespace ScalerCore.Handlers
 
             if (state.NavAgent != null)
             {
-                state.OriginalDefaultSpeed = (float)_navDefaultSpeedField.GetValue(state.NavAgent);
-                _navDefaultSpeedField.SetValue(state.NavAgent, state.OriginalDefaultSpeed * ctrl._options.SpeedFactor);
-                var agent = (NavMeshAgent)_navAgentField.GetValue(state.NavAgent);
+                state.OriginalDefaultSpeed = state.NavAgent.DefaultSpeed;
+                state.NavAgent.DefaultSpeed = state.OriginalDefaultSpeed * ctrl._options.SpeedFactor;
+                var agent = state.NavAgent.Agent;
                 if (agent != null)
                 {
                     agent.speed  *= ctrl._options.SpeedFactor;
                     state.OriginalAgentRadius = agent.radius;
                     agent.radius *= ctrl._options.Factor;
-                    Plugin.Log.LogInfo($"[SC]   navSpeed {state.OriginalDefaultSpeed:F2} → {(float)_navDefaultSpeedField.GetValue(state.NavAgent):F2}  radius {state.OriginalAgentRadius:F2} → {agent.radius:F2}");
+                    Plugin.Log.LogInfo($"[SC]   navSpeed {state.OriginalDefaultSpeed:F2} → {state.NavAgent.DefaultSpeed:F2}  radius {state.OriginalAgentRadius:F2} → {agent.radius:F2}");
                 }
             }
 
@@ -224,10 +216,10 @@ namespace ScalerCore.Handlers
 
             if (state.NavAgent != null)
             {
-                var agentBefore = (NavMeshAgent)_navAgentField.GetValue(state.NavAgent);
+                var agentBefore = state.NavAgent.Agent;
                 Plugin.Log.LogInfo($"[SC]   EXPAND{(isBonk ? "(bonk)" : "")} navSpeed {(agentBefore != null ? agentBefore.speed.ToString("F2") : "N/A")} → {state.OriginalDefaultSpeed:F2}  radius {(agentBefore != null ? agentBefore.radius.ToString("F2") : "N/A")} → {state.OriginalAgentRadius:F2}");
-                _navDefaultSpeedField.SetValue(state.NavAgent, state.OriginalDefaultSpeed);
-                var agent = (NavMeshAgent)_navAgentField.GetValue(state.NavAgent);
+                state.NavAgent.DefaultSpeed = state.OriginalDefaultSpeed;
+                var agent = state.NavAgent.Agent;
                 if (agent != null)
                 {
                     agent.speed      = state.OriginalDefaultSpeed;

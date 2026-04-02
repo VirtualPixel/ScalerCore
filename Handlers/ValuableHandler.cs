@@ -1,6 +1,3 @@
-using System.Reflection;
-using HarmonyLib;
-
 namespace ScalerCore.Handlers
 {
     /// <summary>
@@ -10,10 +7,6 @@ namespace ScalerCore.Handlers
     /// </summary>
     internal class ValuableHandler : IScaleHandler
     {
-        // Valuable value tracking — expand when value drops instead of on break events.
-        // Uses reflection so access modifiers don't matter.
-        internal static readonly FieldInfo? _dollarValueField =
-            AccessTools.Field(typeof(ValuableObject), "dollarValueCurrent");
 
         internal sealed class State
         {
@@ -37,8 +30,7 @@ namespace ScalerCore.Handlers
             if (state == null) return;
 
             // Snapshot current value so we can detect drops.
-            if (_dollarValueField != null)
-                state.LastKnownValue = (float)_dollarValueField.GetValue(state.ValuableObject);
+            state.LastKnownValue = state.ValuableObject.dollarValueCurrent;
         }
 
         public void OnRestore(ScaleController ctrl, bool isBonk)
@@ -57,9 +49,9 @@ namespace ScalerCore.Handlers
         public void OnUpdate(ScaleController ctrl)
         {
             var state = (State?)ctrl.HandlerState;
-            if (state == null || _dollarValueField == null) return;
+            if (state == null) return;
 
-            float currentValue = (float)_dollarValueField.GetValue(state.ValuableObject);
+            float currentValue = state.ValuableObject.dollarValueCurrent;
             if (ctrl._bonkImmuneTimer > 0f)
             {
                 // During immunity, keep tracking value so damage taken during

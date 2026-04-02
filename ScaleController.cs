@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using System.Reflection;
-using HarmonyLib;
 using Photon.Pun;
 using Photon.Realtime;
 using ScalerCore.Handlers;
@@ -53,11 +51,6 @@ namespace ScalerCore
         internal bool HandlerOwnsScale = false;
 
         internal PhysGrabObject? _physGrabObject;
-
-        // ItemEquippable.currentState is private. We check it via reflection to detect
-        // equipping/equipped/unequipping states where we must yield to the inventory system.
-        static readonly FieldInfo? _itemCurrentStateField =
-            AccessTools.Field(typeof(ItemEquippable), "currentState");
 
         internal Transform _t = null!;
         internal Rigidbody? _rb;
@@ -212,11 +205,8 @@ namespace ScalerCore
         {
             if (_itemEquippable == null) return false;
             if (_itemEquippable.IsEquipped()) return true;
-            // Check for equipping/unequipping transitions via private currentState field.
             // Idle = 0; any other value means the inventory system is managing the item.
-            if (_itemCurrentStateField != null)
-                return (int)_itemCurrentStateField.GetValue(_itemEquippable) != 0;
-            return false;
+            return (int)_itemEquippable.currentState != 0;
         }
 
         // LateUpdate runs after all Updates, coroutines, and Animators.

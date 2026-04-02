@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using HarmonyLib;
 using UnityEngine;
 
 namespace ScalerCore.Utilities
@@ -13,9 +12,6 @@ namespace ScalerCore.Utilities
     /// </summary>
     internal class AudioPitchHelper
     {
-        // Sound.LoopPitch is internal; access via reflection.
-        static readonly FieldInfo _loopPitchField =
-            AccessTools.Field(typeof(Sound), "LoopPitch");
 
         // Per-instance state — populated at shrink, cleared at expand.
         Sound[]?  _pitchedSounds;
@@ -55,7 +51,7 @@ namespace ScalerCore.Utilities
             _pitchedSounds          = GatherSounds(searchRoot);
             _soundOriginalPitch     = _pitchedSounds.Select(s => s.Pitch).ToArray();
             _soundOriginalLoopPitch = _pitchedSounds
-                .Select(s => (float)_loopPitchField.GetValue(s)).ToArray();
+                .Select(s => s.LoopPitch).ToArray();
 
             for (int i = 0; i < _pitchedSounds.Length; i++)
             {
@@ -65,7 +61,7 @@ namespace ScalerCore.Utilities
                 // LoopPitch is captured once when a loop starts; update it so that
                 // PlayLoop's "Source.pitch = LoopPitch * multiplier" stays pitched.
                 float lp = _soundOriginalLoopPitch[i];
-                _loopPitchField.SetValue(s, lp * mult);
+                s.LoopPitch = lp * mult;
 
                 // Immediately apply to any currently-playing loop source so it doesn't
                 // wait until the next loop toggle to take effect.
@@ -88,7 +84,7 @@ namespace ScalerCore.Utilities
                 var s = _pitchedSounds[i];
                 if (s == null) continue;
                 s.Pitch = _soundOriginalPitch![i];
-                _loopPitchField.SetValue(s, _soundOriginalLoopPitch![i]);
+                s.LoopPitch = _soundOriginalLoopPitch![i];
                 if (s.Source != null && s.Source.isPlaying)
                     s.Source.pitch = _soundOriginalLoopPitch![i];
             }

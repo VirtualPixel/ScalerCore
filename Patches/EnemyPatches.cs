@@ -37,15 +37,12 @@ namespace ScalerCore.Patches
     [HarmonyPatch(typeof(EnemyFloater), nameof(EnemyFloater.UpdateState))]
     internal static class FloaterChargeMoveInPatch
     {
-        static readonly AccessTools.FieldRef<EnemyFloater, PlayerAvatar> _targetPlayer =
-            AccessTools.FieldRefAccess<EnemyFloater, PlayerAvatar>("targetPlayer");
-
         static void Postfix(EnemyFloater __instance)
         {
             var ctrl = __instance.enemy?.Rigidbody?.GetComponent<ScaleController>();
             if (ctrl == null || !ctrl.IsScaled) return;
 
-            var player = _targetPlayer(__instance);
+            var player = __instance.targetPlayer;
             if (!player) return;
 
             float dist = Vector3.Distance(__instance.feetTransform.position, player.transform.position);

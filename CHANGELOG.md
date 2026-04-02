@@ -19,9 +19,9 @@
 - Fixed players in tumble/object mode (Q) not being shrinkable by guns
 - ScaleManager API now resolves PlayerShrinkLink when target GO doesn't have ScaleController directly
 - Fixed Tricycle (Bella) trike mesh not scaling — rider shrank but the bike stayed full size
-
-### Known behaviors
-- Single doors break off their hinges when shrunken (drawers, safe doors, and double doors stay attached)
+- Single doors now cleanly break off their hinges when shrunken instead of floating in place
+- Replaced most reflection with direct publicizer access for better performance
+- Fixed Loom (Shadow) NRE spam in EnemyShadow.HandLogic after unshrinking
 
 ## 0.2.0
 

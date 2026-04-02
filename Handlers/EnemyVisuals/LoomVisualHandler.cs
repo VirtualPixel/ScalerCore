@@ -8,10 +8,11 @@ namespace ScalerCore.Handlers.EnemyVisuals
     /// Visual handler for Loom (Shadow enemy).
     /// Fixes arm detachment by re-scaling wrist pivot positions in LateUpdate
     /// after the game's EnemyShadow.Update sets them to full-scale values.
+    /// Uses reflection for EnemyShadow fields — direct publicizer access
+    /// causes NREs in the game's hand logic after shrink/unshrink cycles.
     /// </summary>
     internal class LoomVisualHandler : IEnemyVisualHandler
     {
-        // Reflection cache for EnemyShadow fields
         static readonly FieldInfo? _rightWristField = AccessTools.Field(typeof(EnemyShadow), "rightWristPivot");
         static readonly FieldInfo? _leftWristField  = AccessTools.Field(typeof(EnemyShadow), "leftWristPivot");
         static readonly FieldInfo? _origRightPosField = AccessTools.Field(typeof(EnemyShadow), "originalRightWristPosition");
