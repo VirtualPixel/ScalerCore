@@ -254,7 +254,18 @@ namespace ScalerCore
         public void DispatchShrink(ScaleOptions options)
         {
             Plugin.Log.LogInfo($"[SC] DispatchShrink ENTER  {_displayName}  instanceID={GetInstanceID()}  IsScaled={IsScaled}  currentScale={_t.localScale}  GO={gameObject.name}");
-            if (IsScaled) return;
+            if (IsScaled)
+            {
+                // Same factor → toggle (restore). Different factor → rescale with new options.
+                if (Mathf.Approximately(options.Factor, _options.Factor))
+                {
+                    DispatchExpand();
+                    return;
+                }
+                // Different factor: restore first, then fall through to re-shrink
+                Plugin.Log.LogInfo($"[SC] RESCALE {_displayName}  {_options.Factor} → {options.Factor}");
+                DispatchExpand();
+            }
             _options = options;
             IsScaled = true;
             _shrinkTimer = _options.Duration;
