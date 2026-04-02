@@ -61,6 +61,7 @@ namespace ScalerCore
         internal bool       _transitioning;
         Coroutine? _playerBounceAnim;
         float      _shrinkTimer;
+        internal ScaleOptions _options;
         internal float _bonkImmuneTimer; // prevents the gun's own bullet from immediately restoring the target
         internal string _displayName = ""; // enemy parent name or GO name, set in Start
 
@@ -204,7 +205,7 @@ namespace ScalerCore
             bool isPlayer = Handler is PlayerHandler;
             if (_transitioning && !isPlayer && !inInventory)
             {
-                float speed = ShrinkConfig.Speed * OriginalScale.magnitude;
+                float speed = _options.Speed * OriginalScale.magnitude;
                 _animScale = Vector3.MoveTowards(_animScale, _target, speed * Time.deltaTime);
                 _t.localScale = _animScale;
 
@@ -240,29 +241,25 @@ namespace ScalerCore
 
         // --- host calls ---
 
-        public void DispatchShrink()
+        public void DispatchShrink(ScaleOptions options)
         {
             Plugin.Log.LogInfo($"[SC] DispatchShrink ENTER  {_displayName}  instanceID={GetInstanceID()}  IsScaled={IsScaled}  currentScale={_t.localScale}  GO={gameObject.name}");
             if (IsScaled) return;
+            _options = options;
             IsScaled = true;
-            _shrinkTimer = Handler is EnemyHandler     ? ShrinkConfig.EnemyShrinkDuration
-                         : _isItem                     ? ShrinkConfig.ItemShrinkDuration
-                         : Handler is PlayerHandler    ? ShrinkConfig.PlayerShrinkDuration
-                                                       : ShrinkConfig.ValuableShrinkDuration;
+            _shrinkTimer = _options.Duration;
             if (_shrinkTimer < 0f) _shrinkTimer = 0f;
 
             Scaled.Add(this);
 
-            float f = ShrinkConfig.Factor;
+            float f = _options.Factor;
             var target = OriginalScale * f;
 
             // Bonk immunity: at least the animation time, but no less than the configured minimum.
             float animDist    = (OriginalScale - target).magnitude;
-            float animSpeed   = ShrinkConfig.Speed * OriginalScale.magnitude;
+            float animSpeed   = _options.Speed * OriginalScale.magnitude;
             float animTime    = animSpeed > 0f ? (animDist / animSpeed) * 1.1f : 0.75f;
-            float minImmune   = Handler is EnemyHandler ? ShrinkConfig.EnemyBonkImmuneDuration
-                                                        : ShrinkConfig.ValuableBonkImmuneDuration;
-            _bonkImmuneTimer = Mathf.Max(animTime, minImmune);
+            _bonkImmuneTimer = Mathf.Max(animTime, _options.BonkImmuneDuration);
 
             ApplyScale(target);
             SetForceGrabPoint(false);
@@ -283,7 +280,7 @@ namespace ScalerCore
             AssetManager.instance?.PhysImpactEffect(_t.position);
 
             Plugin.Log.LogInfo($"[SC] SHRINK {_displayName}" +
-                $"  factor={ShrinkConfig.Factor}" +
+                $"  factor={_options.Factor}" +
                 $"  scale {OriginalScale} → {target}" +
                 $"  animTime={animDist / (animSpeed > 0f ? animSpeed : 1f):F2}s" +
                 $"  bonkImmune={_bonkImmuneTimer:F2}s" +
@@ -295,8 +292,8 @@ namespace ScalerCore
                 // The grab spring divides force by mass (PhysGrabObject line 788), so mass
                 // below ~0.5 causes violent oscillation when held.
                 if (!_isItem)
-                    _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, ShrinkConfig.ShrunkMassCap);
-                Plugin.Log.LogInfo($"[SC]   mass {_originalMass:F3} → {_rb.mass:F3}  (cap={ShrinkConfig.ShrunkMassCap:F2}  originalMass locked at {_originalMass:F3})");
+                    _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, _options.MassCap);
+                Plugin.Log.LogInfo($"[SC]   mass {_originalMass:F3} → {_rb.mass:F3}  (cap={_options.MassCap:F2}  originalMass locked at {_originalMass:F3})");
             }
 
             // Handler-specific shrink logic (enemy nav/grab, player voice/camera, etc.)
@@ -438,8 +435,8 @@ namespace ScalerCore
             Plugin.Log.LogInfo($"[SC] RPC_Shrink RECV  {_displayName}  target={target}");
             IsScaled = true;
             Scaled.Add(this);
-            if (_rb != null && !_isItem) _rb.mass = Mathf.Clamp(_originalMass * ShrinkConfig.Factor, 0.5f, ShrinkConfig.ShrunkMassCap);
-            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize * ShrinkConfig.Factor;
+            if (_rb != null && !_isItem) _rb.mass = Mathf.Clamp(_originalMass * _options.Factor, 0.5f, _options.MassCap);
+            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize * _options.Factor;
             ApplyScale(target);
             SetForceGrabPoint(false);
             AssetManager.instance?.PhysImpactEffect(_t.position);
@@ -505,7 +502,7 @@ namespace ScalerCore
             if (IsScaled) return;
             if (SemiFunc.IsMasterClientOrSingleplayer())
             {
-                DispatchShrink();
+                DispatchShrink(ScaleOptions.Default);
             }
             else if (_networkPV != null && _networkPV.IsMine && PhotonNetwork.InRoom)
             {
@@ -518,7 +515,7 @@ namespace ScalerCore
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             if (IsScaled) return;
-            DispatchShrink();
+            DispatchShrink(ScaleOptions.Default);
         }
 
         public void RequestManualExpand()
