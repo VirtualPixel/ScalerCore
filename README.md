@@ -234,9 +234,7 @@ For all types:
 ## Known Issues
 
 - Some untested enemy types may float or clip into the ground while shrunken
-- Single doors break off their hinges when shrunken (intentional — drawers, lockers, safe doors, and double doors scale normally)
 - Non-host grab strength may not scale correctly in multiplayer (physics runs on host)
-- Early access 0.3.0 -- API may evolve, pin your dependency version
 
 ## Dependencies
 
