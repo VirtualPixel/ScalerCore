@@ -256,16 +256,32 @@ namespace ScalerCore
             Plugin.Log.LogInfo($"[SC] DispatchShrink ENTER  {_displayName}  instanceID={GetInstanceID()}  IsScaled={IsScaled}  currentScale={_t.localScale}  GO={gameObject.name}");
             if (IsScaled)
             {
-                // Same factor → toggle (restore). Different factor → rescale with new options.
+                // Same factor → toggle (restore). Different factor → rescale in place.
                 if (Mathf.Approximately(options.Factor, _options.Factor))
                 {
                     DispatchExpand();
                     return;
                 }
-                // Different factor: restore first, then fall through to re-shrink
+                // Different factor: update options and animate to the new target without restoring first.
                 Plugin.Log.LogInfo($"[SC] RESCALE {_displayName}  {_options.Factor} → {options.Factor}");
-                DispatchExpand();
+                _options = options;
+                _shrinkTimer = _options.Duration;
+                if (_shrinkTimer < 0f) _shrinkTimer = 0f;
+                float rf = _options.Factor;
+                var newTarget = OriginalScale * rf;
+                _bonkImmuneTimer = _options.BonkImmuneDuration;
+                ApplyScale(newTarget);
+                if (_roomVolumeCheck != null)
+                    _roomVolumeCheck.currentSize = _originalRoomVolumeSize * rf;
+                if (_rb != null && !_isItem)
+                    _rb.mass = Mathf.Clamp(_originalMass * rf, 0.5f, _options.MassCap);
+                if (_networkPV != null && PhotonNetwork.InRoom)
+                    _networkPV.RPC(nameof(RPC_Shrink), RpcTarget.Others, newTarget);
+                return;
             }
+            // Guard against bare `new ScaleOptions()` (all zeroes) — fall back to defaults for critical fields.
+            if (options.Factor <= 0f) options.Factor = ScaleOptions.Default.Factor;
+            if (options.Speed  <= 0f) options.Speed  = ScaleOptions.Default.Speed;
             _options = options;
             IsScaled = true;
             _shrinkTimer = _options.Duration;
