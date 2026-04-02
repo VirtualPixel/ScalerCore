@@ -85,7 +85,8 @@ The registry checks predicates in descending priority order. First match wins.
 
 | Method | Description |
 |--------|-------------|
-| `Apply(GameObject target, float factor = 0)` | Scale the target down. Factor param is reserved -- currently uses `ShrinkConfig.Factor`. |
+| `Apply(GameObject target)` | Scale with default options (ScaleOptions.Default). |
+| `Apply(GameObject target, ScaleOptions options)` | Scale with custom options. Same factor toggles; different factor rescales. |
 | `Restore(GameObject target)` | Restore with smooth animation. |
 | `RestoreImmediate(GameObject target)` | Restore instantly (respects bonk immunity timer). |
 | `IsScaled(GameObject target)` | Returns true if currently scaled. |
@@ -125,31 +126,33 @@ public interface IScaleHandler
 | `Register(IScaleHandler handler, Func<GameObject, bool> predicate, int priority = 0)` | Register a handler. Higher priority wins. Built-ins use priority 0. |
 | `Resolve(GameObject target)` | Returns the highest-priority matching handler, or null. |
 
-### ScaleFactor / ScaleOptions
+### ScaleOptions
 
-`ScaleFactor` is a thin float wrapper with named presets: `ScaleFactor.Shrink`, `.Grow`, `.Normal`.
+Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` and override what you need.
 
-`ScaleOptions` groups per-type settings (duration, animation speed, bonk immunity) with presets for Enemy, Player, Valuable, and Item.
+| Field | Default | Description |
+|-------|---------|-------------|
+| `Factor` | `0.4` | Scale multiplier (0.4 = 40% of original size) |
+| `Duration` | `0` | Seconds until auto-restore (0 = permanent) |
+| `Speed` | `2.0` | Scale animation speed |
+| `BonkImmuneDuration` | `5.0` | Grace period after scaling before damage can restore |
+| `MassCap` | `5.0` | Max rigidbody mass while scaled |
+| `SpeedFactor` | `0.65` | Enemy NavMesh speed multiplier |
+| `DamageMultiplier` | `0.1` | Damage dealt by scaled enemies |
+| `AnimSpeedMultiplier` | `1.5` | Player animation speed while scaled |
+| `FootstepPitchMultiplier` | `1.5` | Player footstep pitch while scaled |
+| `AllowedTargets` | `All` | Flags: `Players`, `Enemies`, `Items`, `Valuables`, `All` |
+| `InvertedMode` | `false` | If true, scaled state is the default — bonk temporarily grows back |
 
-## Configuration Reference
+## Configuration
 
-All values live in `ScalerCore.cfg` (BepInEx config). Defaults:
+ScalerCore has one user-facing setting in `ScalerCore.cfg`:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ShrinkFactor` | `0.4` | Scale multiplier (0.4 = 40% of original size) |
-| `ShrinkSpeed` | `2.0` | Scale animation speed |
-| `EnemyDamageMultiplier` | `0.1` | Damage from shrunken enemies (10% of normal) |
-| `EnemyShrinkDuration` | `120` | Seconds until enemy auto-restores (0 = never) |
-| `ValuableShrinkDuration` | `0` | Seconds until valuable auto-restores (0 = never) |
-| `ItemShrinkDuration` | `0` | Seconds until item auto-restores (0 = never) |
-| `PlayerShrinkDuration` | `0` | Seconds until player auto-restores (0 = never) |
-| `EnemyBonkImmuneDuration` | `5` | Grace period before damage can restore enemy |
-| `ValuableBonkImmuneDuration` | `5` | Grace period before impact can restore valuable |
-| `EnemyShrinkSpeedFactor` | `0.65` | Movement speed multiplier for shrunken enemies |
-| `ShrunkMassCap` | `5.0` | Max rigidbody mass while shrunken |
-| `ShrunkAnimSpeedMult` | `1.5` | Player animation speed while shrunken |
-| `ShrunkFootstepPitchMult` | `1.5` | Player footstep pitch while shrunken |
+| `ShrinkChallengeMode` | `false` | Players start shrunken. Guns temporarily grow you; damage shrinks you back. |
+
+Scaling behavior is controlled per-call via `ScaleOptions` — consuming mods expose whatever settings make sense for them.
 
 ## What ScalerCore Handles Automatically
 
