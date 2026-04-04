@@ -4,6 +4,8 @@ A scaling library for [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO
 
 If you're building a mod that changes the size of things (shrink rays, growth potions, whatever), ScalerCore gives you a clean API and takes care of the edge cases.
 
+<img src="PLACEHOLDER_URL/map_chaos.gif" width="800">
+
 **This is a library, not a standalone mod.** End users don't need to interact with it directly. If you're a player, you probably got here because a mod like [ShrinkerGun: COMPRESSOR](https://thunderstore.io/c/repo/p/Vippy/ShrinkerGun/) depends on it.
 
 > **For modders building size-changing mechanics.** If you're looking for a shrink ray, check out [ShrinkerGun: COMPRESSOR](https://thunderstore.io/c/repo/p/Vippy/ShrinkerGun/) which is built on ScalerCore.
@@ -193,6 +195,8 @@ ScalerCore has one user-facing setting in `ScalerCore.cfg`:
 All scaling behavior (factor, speed, duration, etc.) is controlled per-call via `ScaleOptions` -- consuming mods expose whatever settings make sense for them.
 
 ## What ScalerCore Handles
+
+<img src="PLACEHOLDER_URL/shrinking_enemy_picking_up.gif" width="800">
 
 For enemies:
 - Visual mesh + physics rigidbody scaled separately (EnemyParent is never scaled)
