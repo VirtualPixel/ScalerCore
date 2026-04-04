@@ -22,11 +22,12 @@ namespace ScalerCore.Handlers
 
         // Pupil override constants
         public const float Multiplier = 3f;
-        public const int Priority = 10;
-        public const float SpringSpeedIn = 20f;
+        public const int Priority = 4;          // matches vanilla ceiling eye, tranq, etc.
+        public const float SpringSpeedIn = 3f;   // vanilla range is 1–5
         public const float SpringDampIn = 0.5f;
         public const float SpringSpeedOut = 5f;
         public const float SpringDampOut = 0.5f;
+        public const float PupilReturnSpeed = 3f;
 
         /// <summary>
         /// Holds all player-specific component references and saved originals.
@@ -65,6 +66,13 @@ namespace ScalerCore.Handlers
             // FOV / camera
             internal float OriginalFOV;
             internal float OriginalNearClip;
+
+            // Pupil transition tracking
+            internal bool WasExpressing;
+
+            // Tumble
+            internal float TumbleFollowOriginalY = float.NaN;
+            internal bool WasTumbling;
 
             // Menu avatar
             internal Transform? MenuAvatarTransform;
@@ -113,7 +121,7 @@ namespace ScalerCore.Handlers
                 var link = pac.CollisionTransform.GetComponent<PlayerShrinkLink>()
                          ?? pac.CollisionTransform.gameObject.AddComponent<PlayerShrinkLink>();
                 link.Controller = ctrl;
-                Plugin.Log.LogInfo($"[SC] PlayerShrinkLink attached → {pac.CollisionTransform.gameObject.name}  colliderGO={(pac.Collider != null ? pac.Collider.gameObject.name : "null")}  avatar={ctrl.gameObject.name}");
+                Plugin.Log.LogDebug($"[SC] PlayerShrinkLink attached → {pac.CollisionTransform.gameObject.name}  colliderGO={(pac.Collider != null ? pac.Collider.gameObject.name : "null")}  avatar={ctrl.gameObject.name}");
             }
             else
                 Plugin.Log.LogWarning($"[SC] PlayerShrinkLink SKIP  pac={pac != null}  collisionXform={(pac?.CollisionTransform != null)}  avatar={ctrl.gameObject.name}");
@@ -140,13 +148,21 @@ namespace ScalerCore.Handlers
                 float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
                 float pitchMult = 1f + (1f - factor) * 0.5f;
                 state.PlayerAvatar.voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 9999f);
+                Plugin.Log.LogDebug($"[SC] VOICE PITCH SET  {ctrl._displayName}  pitch={pitchMult:F2}  isLocal={state.PlayerAvatar.isLocal}  isMine={ctrl._networkPV?.IsMine}");
+            }
+            else
+            {
+                Plugin.Log.LogDebug($"[SC] VOICE PITCH SKIP  {ctrl._displayName}  voiceChat=null  isLocal={state.PlayerAvatar.isLocal}  voiceChatFetched={state.PlayerAvatar.voiceChatFetched}");
             }
 
             // Local-player-only: adjust camera, grab, and movement. In singleplayer
             // PhotonNetwork.InRoom is false so we skip the IsMine check entirely.
             bool isLocalPlayer = !PhotonNetwork.InRoom || (ctrl._networkPV != null && ctrl._networkPV.IsMine);
             if (isLocalPlayer)
+            {
                 ApplyLocalPlayerShrinkEffects(ctrl);
+                EjectPocketedShrunkItems(ctrl);
+            }
         }
 
         /// <summary>
@@ -246,6 +262,41 @@ namespace ScalerCore.Handlers
             if (ctrl.IsScaled && !ctrl._transitioning)
                 ctrl._t.localScale = ctrl._target;
 
+            // Tumble visual offset: the tumble body stays full-size (scaling it causes
+            // fall-through), but the shrunken visual mesh sinks into the tumble sphere.
+            // Nudge followPosition upward so the mini player sits on top of the ball.
+            var tumble = state.PlayerAvatar.tumble;
+            if (tumble != null && tumble.followPosition != null)
+            {
+                // Cache the original Y on first sight.
+                if (float.IsNaN(state.TumbleFollowOriginalY))
+                    state.TumbleFollowOriginalY = tumble.followPosition.localPosition.y;
+
+                if (ctrl.IsScaled && state.PlayerAvatar.isTumbling)
+                {
+                    // When entering tumble while shrunken, nudge the body up so the
+                    // full-size colliders don't spawn inside thin floor geometry.
+                    if (!state.WasTumbling && tumble.rb != null)
+                        tumble.rb.position += Vector3.up * 0.3f;
+                    state.WasTumbling = true;
+
+                    float offset = (1f - ctrl._options.Factor) * 0.1f;
+                    var pos = tumble.followPosition.localPosition;
+                    pos.y = state.TumbleFollowOriginalY + offset;
+                    tumble.followPosition.localPosition = pos;
+                }
+                else
+                {
+                    state.WasTumbling = false;
+                    if (tumble.followPosition.localPosition.y != state.TumbleFollowOriginalY)
+                    {
+                        var pos = tumble.followPosition.localPosition;
+                        pos.y = state.TumbleFollowOriginalY;
+                        tumble.followPosition.localPosition = pos;
+                    }
+                }
+            }
+
             // Pause menu avatar: scale to match shrunk state so the preview shows mini player.
             // Lazy-cached because PlayerAvatarMenu may not exist at Start time.
             if (state.MenuAvatarTransform == null && PlayerAvatarMenu.instance != null)
@@ -293,10 +344,10 @@ namespace ScalerCore.Handlers
 
                     if (!expressing)
                     {
-                        // Local player: call OverridePupilSize which sends the activation RPC.
-                        // 9999s timer so it never expires while shrunken. Game's per-frame
-                        // OverridePupilSizeLogic on remotes keeps refreshing from the RPC state.
-                        state.PlayerAvatar.OverridePupilSize(Multiplier, Priority, SpringSpeedIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 9999f);
+                        // Use a gentle spring when returning from expression so pupils don't pop.
+                        // Normal shrink uses SpringSpeedIn (fast), expression recovery uses a slower rate.
+                        float springIn = state.WasExpressing ? PupilReturnSpeed : SpringSpeedIn;
+                        state.PlayerAvatar.OverridePupilSize(Multiplier, Priority, springIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 9999f);
                     }
                     else
                     {
@@ -313,7 +364,13 @@ namespace ScalerCore.Handlers
                     {
                         var eyes = state.PlayerAvatar.playerAvatarVisuals.playerEyes;
                         if (eyes != null)
-                            eyes.pupilSizeMultiplier = Multiplier;
+                        {
+                            // Gentle lerp when returning from expression, instant otherwise.
+                            if (state.WasExpressing)
+                                eyes.pupilSizeMultiplier = Mathf.Lerp(eyes.pupilSizeMultiplier, Multiplier, Time.deltaTime * PupilReturnSpeed);
+                            else
+                                eyes.pupilSizeMultiplier = Multiplier;
+                        }
                     }
                     else
                     {
@@ -323,6 +380,8 @@ namespace ScalerCore.Handlers
                         state.PlayerAvatar.overridePupilSizeTimer = 0f;
                     }
                 }
+
+                state.WasExpressing = expressing;
 
                 // Apply big pupils to the pause menu avatar preview too (only when not expressing).
                 if (state.MenuEyes != null && isLocal)
@@ -392,7 +451,7 @@ namespace ScalerCore.Handlers
                 PhysGrabber.instance.minDistanceFromPlayer = state.OriginalGrabMinDist * f;
                 PhysGrabber.instance.maxDistanceFromPlayer = state.OriginalGrabMaxDist * f;
                 PhysGrabber.instance.minDistanceFromPlayerOriginal = state.OriginalGrabMinDist * f;
-                Plugin.Log.LogInfo($"[SC] player grab  strength {baseStr:F2}→{PhysGrabber.instance.grabStrength:F2} range {baseRange:F2}→{PhysGrabber.instance.grabRange:F2}  throw {baseThrow:F2}→{PhysGrabber.instance.throwStrength:F2}  minDist {state.OriginalGrabMinDist:F2}→{PhysGrabber.instance.minDistanceFromPlayer:F2}  maxDist {state.OriginalGrabMaxDist:F2}→{PhysGrabber.instance.maxDistanceFromPlayer:F2}");
+                Plugin.Log.LogDebug($"[SC] player grab  strength {baseStr:F2}→{PhysGrabber.instance.grabStrength:F2} range {baseRange:F2}→{PhysGrabber.instance.grabRange:F2}  throw {baseThrow:F2}→{PhysGrabber.instance.throwStrength:F2}  minDist {state.OriginalGrabMinDist:F2}→{PhysGrabber.instance.minDistanceFromPlayer:F2}  maxDist {state.OriginalGrabMaxDist:F2}→{PhysGrabber.instance.maxDistanceFromPlayer:F2}");
             }
             else Plugin.Log.LogWarning("[SC] PhysGrabber.instance null — grab range not scaled");
             float speedMult = Mathf.Lerp(1f, f, 0.5f);
@@ -407,7 +466,7 @@ namespace ScalerCore.Handlers
             if (AssetManager.instance?.mainCamera != null)
             {
                 state.OriginalNearClip = AssetManager.instance.mainCamera.nearClipPlane;
-                AssetManager.instance.mainCamera.nearClipPlane = state.OriginalNearClip * f;
+                AssetManager.instance.mainCamera.nearClipPlane = state.OriginalNearClip * f * 0.5f;
             }
             if (PlayerCollision.instance != null)
             {
@@ -433,9 +492,9 @@ namespace ScalerCore.Handlers
                 state.OriginalStandCheckOffset = PlayerCollisionStand.instance.Offset;
                 PlayerCollisionStand.instance.Offset = state.OriginalStandCheckOffset * f;
             }
-            // PlayerCollisionGrounded: intentionally NOT scaled.
-            // Scaling the sphere radius/offset breaks ground detection (can't walk or jump).
-            // Wall-jumping near objects needs a different fix (e.g. filtering by contact normal).
+            // Ground check sphere: not scaled. The game's OverlapSphere doesn't filter
+            // by contact direction, so shrunken players can wall-jump. Fixing this
+            // properly requires a normal check or raycast, not just radius scaling.
             PlayerShrinkScreenEffects(ctrl, shrinking: true);
         }
 
@@ -491,7 +550,7 @@ namespace ScalerCore.Handlers
             }
             if (PlayerCollisionStand.instance != null)
                 PlayerCollisionStand.instance.Offset = state.OriginalStandCheckOffset;
-            // Ground check collider intentionally not modified (see ApplyLocalPlayerShrinkEffects).
+            // Ground check sphere not modified (see ApplyLocalPlayerShrinkEffects).
             PlayerShrinkScreenEffects(ctrl, shrinking: false);
         }
 
@@ -512,6 +571,32 @@ namespace ScalerCore.Handlers
             int rngLvl = StatsManager.instance.playerUpgradeRange[steamID];
             int thrLvl = StatsManager.instance.playerUpgradeThrow[steamID];
             return (1f + strLvl * 0.2f, 4f + rngLvl * 1f, thrLvl * 0.3f);
+        }
+
+        /// <summary>
+        /// Force-unequip any pocketed shrunken items when the player shrinks.
+        /// A shrunken player shouldn't carry oversized items in their inventory.
+        /// </summary>
+        static void EjectPocketedShrunkItems(ScaleController playerCtrl)
+        {
+            if (Inventory.instance == null) return;
+            var grabber = PhysGrabber.instance;
+            if (grabber == null) return;
+
+            for (int i = 0; i < 3; i++)
+            {
+                var spot = Inventory.instance.GetSpotByIndex(i);
+                if (spot == null || !spot.IsOccupied()) continue;
+                var item = spot.CurrentItem;
+                if (item == null) continue;
+
+                // Only eject items that are shrunken (ones we made pocketable).
+                var itemCtrl = item.GetComponent<ScaleController>();
+                if (itemCtrl == null || !itemCtrl.IsScaled) continue;
+
+                item.ForceUnequip(playerCtrl._t.position + Vector3.up * 0.5f, grabber.photonView.ViewID);
+                Plugin.Log.LogDebug($"[SC] Ejected shrunken item from slot {i}");
+            }
         }
 
         /// <summary>

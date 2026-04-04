@@ -61,7 +61,7 @@ namespace ScalerCore.Handlers
             }
             else if (state.LastKnownValue >= 0f && currentValue < state.LastKnownValue)
             {
-                Plugin.Log.LogInfo($"[SC] VALUE DROP {ctrl._displayName}  ${state.LastKnownValue:F2} -> ${currentValue:F2}  -> bonk expand");
+                Plugin.Log.LogDebug($"[SC] VALUE DROP {ctrl._displayName}  ${state.LastKnownValue:F2} -> ${currentValue:F2}  -> bonk expand");
                 state.LastKnownValue = -1f;
                 ctrl.DispatchExpandNow();
             }

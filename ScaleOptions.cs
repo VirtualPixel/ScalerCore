@@ -15,15 +15,15 @@ namespace ScalerCore
 
     /// <summary>
     /// Per-call scaling options. Every ScaleManager.Apply() call passes one of these.
-    /// The ScaleController stores it for the duration of the shrink session.
+    /// The ScaleController stores it for the duration of the scale session.
     /// Use ScaleOptions.Default and override fields as needed.
     /// </summary>
     public struct ScaleOptions
     {
-        /// <summary>Scale multiplier (0.4 = 40% of original).</summary>
+        /// <summary>Scale multiplier. Values below 1 shrink, above 1 enlarge. (0.4 = 40%, 2.0 = 200%)</summary>
         public float Factor;
 
-        /// <summary>Seconds until auto-restore. 0 = permanent until toggled/bonked.</summary>
+        /// <summary>Seconds until auto-restore. 0 = permanent until toggled or bonked.</summary>
         public float Duration;
 
         /// <summary>Scale animation speed (scaled by original size magnitude).</summary>
@@ -32,14 +32,11 @@ namespace ScalerCore
         /// <summary>Minimum seconds of bonk immunity after scaling.</summary>
         public float BonkImmuneDuration;
 
-        /// <summary>Maximum rigidbody mass while scaled. Clamped between 0.5 and this value.</summary>
+        /// <summary>Maximum rigidbody mass while scaled. Set higher for growth mods.</summary>
         public float MassCap;
 
         /// <summary>Enemy NavMesh speed multiplier while scaled.</summary>
         public float SpeedFactor;
-
-        /// <summary>Damage multiplier for attacks from scaled entities.</summary>
-        public float DamageMultiplier;
 
         /// <summary>Player animation speed multiplier while scaled.</summary>
         public float AnimSpeedMultiplier;
@@ -51,40 +48,37 @@ namespace ScalerCore
         public ScaleTargets AllowedTargets;
 
         /// <summary>
-        /// If true, shrunken is the default state.
-        /// Bonk/damage temporarily grows back; timer re-shrinks.
+        /// If true, the scaled state is the default.
+        /// Bonk/damage temporarily restores; timer re-scales.
         /// </summary>
         public bool InvertedMode;
 
         /// <summary>
-        /// If true, valuables won't expand when they take damage while scaled.
+        /// If true, valuables won't restore when they take damage while scaled.
         /// Useful for cart mods where items bump into each other constantly.
-        /// Default: false (value-drop detection triggers bonk expand).
         /// </summary>
         public bool SuppressValueDropExpand;
 
         /// <summary>
         /// If true, rigidbody mass stays at its original value while scaled.
         /// Useful for cart mods where items should weigh the same regardless of visual size.
-        /// Default: false (mass scales with factor, clamped by MassCap).
         /// </summary>
         public bool PreserveMass;
 
         /// <summary>
-        /// Default options matching current ShrinkerGun behavior.
-        /// Use this as a starting point and override fields as needed.
+        /// Sensible defaults for a shrink ray. Override fields as needed.
+        /// For growth mods, set Factor > 1 and increase MassCap.
         /// </summary>
         public static ScaleOptions Default => new()
         {
-            Factor                = 0.4f,
-            Duration              = 0f,
-            Speed                 = 2.0f,
-            BonkImmuneDuration    = 5.0f,
-            MassCap               = 5.0f,
-            SpeedFactor           = 0.65f,
-            DamageMultiplier      = 0.1f,
-            AnimSpeedMultiplier   = 1.5f,
-            FootstepPitchMultiplier = 1.5f,
+            Factor                    = 0.4f,
+            Duration                  = 0f,
+            Speed                     = 2.0f,
+            BonkImmuneDuration        = 5.0f,
+            MassCap                   = 50f,
+            SpeedFactor               = 0.75f,
+            AnimSpeedMultiplier       = 1.5f,
+            FootstepPitchMultiplier   = 1.5f,
             AllowedTargets            = ScaleTargets.All,
             InvertedMode              = false,
             SuppressValueDropExpand   = false,

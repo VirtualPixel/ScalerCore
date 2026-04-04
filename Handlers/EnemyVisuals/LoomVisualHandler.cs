@@ -57,7 +57,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
             if (_slapDistField != null)
                 loomState.OrigSlapDist = (float)_slapDistField.GetValue(shadow);
 
-            Plugin.Log.LogInfo($"[SC]   Loom: wrists R={loomState.RightWrist != null} L={loomState.LeftWrist != null}" +
+            Plugin.Log.LogDebug($"[SC]   Loom: wrists R={loomState.RightWrist != null} L={loomState.LeftWrist != null}" +
                 $"  handMoveDist={loomState.OrigHandMoveDist:F1}  slapDist={loomState.OrigSlapDist:F1}");
 
             return loomState;

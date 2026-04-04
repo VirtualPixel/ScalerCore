@@ -4,8 +4,6 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
-using UnityEngine.SocialPlatforms;
-
 namespace ScalerCore
 {
     // --- tumble link: attach PlayerShrinkLink when tumble GO is created ---
@@ -26,7 +24,7 @@ namespace ScalerCore
             foreach (var col in __instance.GetComponentsInChildren<Collider>(true))
                 AttachLink(col.gameObject, ctrl);
 
-            Plugin.Log.LogInfo($"[SC] PlayerShrinkLink (tumble) attached → {__instance.gameObject.name}  avatar={ctrl.gameObject.name}");
+            Plugin.Log.LogDebug($"[SC] PlayerShrinkLink (tumble) attached → {__instance.gameObject.name}  avatar={ctrl.gameObject.name}");
         }
 
         static void AttachLink(GameObject go, ScaleController ctrl)
@@ -39,8 +37,17 @@ namespace ScalerCore
     [HarmonyPatch(typeof(PlayerHealth), nameof(PlayerHealth.Hurt))]
     internal static class PlayerBonkPatch
     {
-        static void Postfix(PlayerHealth __instance)
+        static void Prefix(PlayerHealth __instance, out int __state)
         {
+            __state = __instance.health;
+        }
+
+        static void Postfix(PlayerHealth __instance, int __state)
+        {
+            // Only trigger bonk if health actually decreased. This filters out
+            // zero-damage tumble/jump collisions that call Hurt but don't deal damage.
+            if (__instance.health >= __state) return;
+
             var ctrl = __instance.GetComponentInParent<ScaleController>()
                     ?? __instance.GetComponentInChildren<ScaleController>();
             if (ctrl == null) return;
@@ -55,6 +62,64 @@ namespace ScalerCore
             {
                 // Inverted, currently full size (temporarily grown): bonk re-shrinks.
                 ctrl.RequestInvertedReshrink();
+            }
+        }
+    }
+
+    // --- block pocketing injected-equippable items while the player is shrunken ---
+
+    [HarmonyPatch(typeof(ItemEquippable), nameof(ItemEquippable.RequestEquip))]
+    internal static class ShrunkEquipBlockPatch
+    {
+        static bool Prefix(ItemEquippable __instance)
+        {
+            // Only block items where WE injected ItemEquippable via PocketHelper.
+            // Normal pocketable items (grenades, orbs, etc.) should always work.
+            var itemCtrl = __instance.GetComponent<ScaleController>();
+            if (itemCtrl == null) return true;
+
+            // Check handler state to see if we added the equippable.
+            bool weAdded = false;
+            if (itemCtrl.HandlerState is Handlers.CartHandler.State cartState)
+                weAdded = cartState.AddedEquippable;
+            else if (itemCtrl.HandlerState is Handlers.ItemHandler.State itemState)
+                weAdded = itemState.AddedEquippable;
+            if (!weAdded) return true;
+
+            // We injected this equippable. Block if the player is also shrunken.
+            var player = PlayerAvatar.instance;
+            if (player == null) return true;
+            var playerCtrl = player.GetComponent<ScaleController>();
+            if (playerCtrl != null && playerCtrl.IsScaled) return false;
+
+            return true;
+        }
+    }
+
+    // --- wall-jump fix: verify grounded with a downward ray when shrunken ---
+    // The game's OverlapSphere ground check doesn't care about direction, so
+    // touching a wall counts as "grounded" when shrunken. This postfix does
+    // a quick downward raycast to confirm there's actually floor below.
+
+    [HarmonyPatch(typeof(PlayerCollisionGrounded), "Update")]
+    internal static class GroundedWallJumpFix
+    {
+        static void Postfix(PlayerCollisionGrounded __instance)
+        {
+            if (!__instance.Grounded) return;
+            var player = PlayerAvatar.instance;
+            if (player == null) return;
+            var ctrl = player.GetComponent<ScaleController>();
+            if (ctrl == null || !ctrl.IsScaled) return;
+
+            // Short ray downward from the ground check position.
+            // If it doesn't hit anything within the sphere radius, we're on a wall, not the floor.
+            float checkDist = __instance.Collider.radius * 1.5f;
+            if (!Physics.Raycast(__instance.transform.position, Vector3.down, checkDist, __instance.LayerMask, QueryTriggerInteraction.Ignore))
+            {
+                __instance.Grounded = false;
+                __instance.GroundedTimer = 0f;
+                __instance.CollisionController.Grounded = false;
             }
         }
     }

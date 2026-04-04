@@ -25,7 +25,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
                 return null;
             }
 
-            Plugin.Log.LogInfo($"[SC]   BirthdayBoy: cached, maxBalloons={bb.maxBalloons}");
+            Plugin.Log.LogDebug($"[SC]   BirthdayBoy: cached, maxBalloons={bb.maxBalloons}");
             return new BirthdayBoyState { BirthdayBoy = bb };
         }
 

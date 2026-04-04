@@ -125,10 +125,6 @@ namespace ScalerCore.Handlers
                 state.AnimOriginalScale    = state.AnimTarget.localScale;
                 state.AnimOriginalLocalPos = state.AnimTarget.localPosition;
             }
-            else
-            {
-            }
-
             state.NavAgent  = ep.GetComponentInChildren<EnemyNavMeshAgent>();
             state.EnemyRb   = ctrl.GetComponent<EnemyRigidbody>();
 
@@ -149,7 +145,7 @@ namespace ScalerCore.Handlers
             string enemyName = EnemyVisualRegistry.ExtractEnemyName(ep);
             state.VisualHandler = EnemyVisualRegistry.Resolve(enemyName);
             state.VisualState = state.VisualHandler.Setup(ctrl, state, ep);
-            Plugin.Log.LogInfo($"[SC]   visualHandler={state.VisualHandler.GetType().Name} for '{enemyName}'");
+            Plugin.Log.LogDebug($"[SC]   visualHandler={state.VisualHandler.GetType().Name} for '{enemyName}'");
 
             ctrl.HandlerState = state;
         }
@@ -172,34 +168,33 @@ namespace ScalerCore.Handlers
                     agent.speed  *= ctrl._options.SpeedFactor;
                     state.OriginalAgentRadius = agent.radius;
                     agent.radius *= ctrl._options.Factor;
-                    Plugin.Log.LogInfo($"[SC]   navSpeed {state.OriginalDefaultSpeed:F2} → {state.NavAgent.DefaultSpeed:F2}  radius {state.OriginalAgentRadius:F2} → {agent.radius:F2}");
+                    Plugin.Log.LogDebug($"[SC]   navSpeed {state.OriginalDefaultSpeed:F2} → {state.NavAgent.DefaultSpeed:F2}  radius {state.OriginalAgentRadius:F2} → {agent.radius:F2}");
                 }
             }
 
             if (state.EnemyRb != null)
             {
+                // Scale grab force proportionally. Tiny enemies are easy to grab,
+                // giant enemies are harder. Factor < 1 reduces, factor > 1 increases.
                 state.OriginalGrabForce = state.EnemyRb.grabForceNeeded;
                 state.MiniGrabForce = ScriptableObject.CreateInstance<GrabForce>();
-                state.MiniGrabForce.amount = 0f;
+                float origAmount = state.OriginalGrabForce != null ? state.OriginalGrabForce.amount : 0f;
+                state.MiniGrabForce.amount = origAmount * ctrl._options.Factor;
                 state.EnemyRb.grabForceNeeded = state.MiniGrabForce;
 
                 // Scale PhysFollowPosition/Rotation speeds proportionally to size.
-                // These forces pull the rb toward the NavMesh path every FixedUpdate.
-                // At full-size values, even low-mass enemies feel too heavy to carry.
                 state.OriginalSpeedChase    = state.EnemyRb.positionSpeedChase;
                 state.OriginalSpeedIdle     = state.EnemyRb.positionSpeedIdle;
                 state.OriginalRotSpeedChase = state.EnemyRb.rotationSpeedChase;
                 state.OriginalRotSpeedIdle  = state.EnemyRb.rotationSpeedIdle;
-                // Factor^2: follow force scales with both size and physical presence.
-                // A 40% enemy has 16% follow force — weak enough for 0-strength grab.
                 float ff = ctrl._options.Factor * ctrl._options.Factor;
                 state.EnemyRb.positionSpeedChase = state.OriginalSpeedChase * ff;
                 state.EnemyRb.positionSpeedIdle  = state.OriginalSpeedIdle  * ff;
                 state.EnemyRb.rotationSpeedChase = state.OriginalRotSpeedChase * ff;
                 state.EnemyRb.rotationSpeedIdle  = state.OriginalRotSpeedIdle  * ff;
 
-                Plugin.Log.LogInfo($"[SC]   grabForceNeeded {(state.OriginalGrabForce != null ? state.OriginalGrabForce.amount.ToString("F2") : "null")} → 0 (instant grab)");
-                Plugin.Log.LogInfo($"[SC]   posSpeedChase {state.OriginalSpeedChase:F2} → {state.EnemyRb.positionSpeedChase:F2}  posSpeedIdle {state.OriginalSpeedIdle:F2} → {state.EnemyRb.positionSpeedIdle:F2}");
+                Plugin.Log.LogDebug($"[SC]   grabForce {origAmount:F2} → {state.MiniGrabForce.amount:F2}");
+                Plugin.Log.LogDebug($"[SC]   posSpeedChase {state.OriginalSpeedChase:F2} → {state.EnemyRb.positionSpeedChase:F2}  posSpeedIdle {state.OriginalSpeedIdle:F2} → {state.EnemyRb.positionSpeedIdle:F2}");
             }
 
             state.OriginalsCaptured = true;
@@ -217,7 +212,7 @@ namespace ScalerCore.Handlers
             if (state.NavAgent != null)
             {
                 var agentBefore = state.NavAgent.Agent;
-                Plugin.Log.LogInfo($"[SC]   EXPAND{(isBonk ? "(bonk)" : "")} navSpeed {(agentBefore != null ? agentBefore.speed.ToString("F2") : "N/A")} → {state.OriginalDefaultSpeed:F2}  radius {(agentBefore != null ? agentBefore.radius.ToString("F2") : "N/A")} → {state.OriginalAgentRadius:F2}");
+                Plugin.Log.LogDebug($"[SC]   EXPAND{(isBonk ? "(bonk)" : "")} navSpeed {(agentBefore != null ? agentBefore.speed.ToString("F2") : "N/A")} → {state.OriginalDefaultSpeed:F2}  radius {(agentBefore != null ? agentBefore.radius.ToString("F2") : "N/A")} → {state.OriginalAgentRadius:F2}");
                 state.NavAgent.DefaultSpeed = state.OriginalDefaultSpeed;
                 var agent = state.NavAgent.Agent;
                 if (agent != null)
@@ -231,7 +226,7 @@ namespace ScalerCore.Handlers
 
             if (state.EnemyRb != null)
             {
-                Plugin.Log.LogInfo($"[SC]   EXPAND{(isBonk ? "(bonk)" : "")} posSpeedChase {state.EnemyRb.positionSpeedChase:F2} → {state.OriginalSpeedChase:F2}  posSpeedIdle {state.EnemyRb.positionSpeedIdle:F2} → {state.OriginalSpeedIdle:F2}");
+                Plugin.Log.LogDebug($"[SC]   EXPAND{(isBonk ? "(bonk)" : "")} posSpeedChase {state.EnemyRb.positionSpeedChase:F2} → {state.OriginalSpeedChase:F2}  posSpeedIdle {state.EnemyRb.positionSpeedIdle:F2} → {state.OriginalSpeedIdle:F2}");
                 if (state.OriginalGrabForce != null) state.EnemyRb.grabForceNeeded = state.OriginalGrabForce;
                 if (state.MiniGrabForce != null) { Object.Destroy(state.MiniGrabForce); state.MiniGrabForce = null; }
                 state.EnemyRb.positionSpeedChase = state.OriginalSpeedChase;
@@ -264,9 +259,9 @@ namespace ScalerCore.Handlers
                     ctrl._rb.mass = wanted;
             }
 
-            // Boost grab spring while held so it overcomes follow forces on all enemies.
-            // Same API melee weapons use — no speed zeroing, no soul-ripping.
-            if (ctrl._physGrabObject != null
+            // Boost grab spring while held so it overcomes follow forces on shrunken enemies.
+            if (ctrl._options.Factor < 1f
+                && ctrl._physGrabObject != null
                 && ctrl._physGrabObject.playerGrabbing.Count > 0)
                 ctrl._physGrabObject.OverrideMinGrabStrength(5f, 0.1f);
         }

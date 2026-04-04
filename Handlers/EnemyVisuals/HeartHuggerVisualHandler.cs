@@ -39,7 +39,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
                     huggerState.VisualsTransform = child;
                     huggerState.VisualsOriginalScale = child.localScale;
                     huggerState.VisualsOriginalLocalPos = child.localPosition;
-                    Plugin.Log.LogInfo($"[SC]   HeartHugger: visual root={child.name}  localPos={child.localPosition}");
+                    Plugin.Log.LogDebug($"[SC]   HeartHugger: visual root={child.name}  localPos={child.localPosition}");
                     break;
                 }
             }
@@ -61,7 +61,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
             }
 
             if (huggerState.SegmentColliders.Count > 0)
-                Plugin.Log.LogInfo($"[SC]   HeartHugger: found {huggerState.SegmentColliders.Count} external segment colliders");
+                Plugin.Log.LogDebug($"[SC]   HeartHugger: found {huggerState.SegmentColliders.Count} external segment colliders");
 
             return huggerState;
         }

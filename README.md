@@ -16,7 +16,7 @@ Reference `ScalerCore.dll` in your project. Add a hard dependency in your plugin
 [BepInDependency("Vippy.ScalerCore", BepInDependency.DependencyFlags.HardDependency)]
 ```
 
-ScalerCore automatically attaches `ScaleController` components to all enemies, players, valuables, items, and doors at runtime via Harmony patches. You don't need to add them yourself.
+ScalerCore automatically attaches `ScaleController` components to all enemies, players, valuables, items, carts, and doors at runtime via Harmony patches. You don't need to add them yourself.
 
 ## Quick Start
 
@@ -54,7 +54,7 @@ ScalerCore attaches a `ScaleController` (a `MonoBehaviourPunCallbacks`) to every
 4. Syncs state to all clients via Photon RPCs
 5. Force-applies the target scale every `LateUpdate` to fight game code that resets `localScale`
 
-Built-in handlers cover enemies, players, valuables, and items. Objects without a matching handler (like doors) use the base `ScaleController` behavior.
+Built-in handlers cover enemies, players, valuables, items, carts, and doors.
 
 ## Custom Handlers
 
@@ -127,7 +127,7 @@ Attached automatically to game objects. Key public members:
 | `OriginalScale` | The object's scale before any modification. |
 | `TargetType` | What kind of object this is (`ScaleTargets.Players`, `.Enemies`, etc.). |
 | `ScaleTarget` | Override in handler's `Setup` to scale a different transform than the controller's. |
-| `AllowManualScale` | Static bool — gates F9/F10 debug key requests. Host sets it. |
+| `AllowManualScale` | Static bool — gates debug shrink/expand requests. Host sets it. |
 | `RequestBonkExpand()` | Client-safe expand request (sends RPC to host if called on non-host). |
 | `RequestManualExpand()` | Manual expand (skips bonk immunity). |
 | `RequestManualShrink()` | Manual shrink request. |
@@ -163,9 +163,8 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as
 | `Duration` | `0` | Seconds until auto-restore (0 = permanent) |
 | `Speed` | `2.0` | Scale animation speed |
 | `BonkImmuneDuration` | `5.0` | Grace period after scaling before damage can restore |
-| `MassCap` | `5.0` | Max rigidbody mass while scaled |
-| `SpeedFactor` | `0.65` | Enemy NavMesh speed multiplier |
-| `DamageMultiplier` | `0.1` | Damage dealt by scaled enemies |
+| `MassCap` | `50.0` | Max rigidbody mass while scaled |
+| `SpeedFactor` | `0.75` | Enemy NavMesh speed multiplier |
 | `AnimSpeedMultiplier` | `1.5` | Player animation speed while scaled |
 | `FootstepPitchMultiplier` | `1.5` | Player footstep pitch while scaled |
 | `AllowedTargets` | `All` | Flags: `Players`, `Enemies`, `Items`, `Valuables`, `All` |
@@ -229,6 +228,11 @@ For items:
 - Inventory system compatibility (yields during equip/unequip)
 - ForceGrabPoint handling
 
+For non-pocketable items (carts, cart cannon, cart laser, tracker):
+- Become pocketable while shrunken (press inventory key to stash)
+- Shrunken players can't pocket shrunken items — if you get shrunk while holding one, it drops
+- Restoring removes the equip ability so full-size items stay on the ground
+
 For all types:
 - Audio pitch shifted on all Sound objects
 - Smooth scale animation with force-apply in LateUpdate
@@ -244,7 +248,6 @@ For all types:
 ## Dependencies
 
 - [BepInEx 5](https://github.com/BepInEx/BepInEx) (5.4.2100+)
-- [REPOLib](https://thunderstore.io/c/repo/p/Zehs/REPOLib/) (3.0.3+)
 
 ## Reference Implementation
 

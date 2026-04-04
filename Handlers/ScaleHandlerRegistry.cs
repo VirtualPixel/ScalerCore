@@ -53,6 +53,12 @@ namespace ScalerCore.Handlers
                 go => go.GetComponent<PlayerAvatar>() != null, 0);
             Register(new ValuableHandler(),
                 go => go.GetComponent<ValuableObject>() != null, 0);
+            // Carts: has PhysGrabCart and is NOT already a pocket cart (isSmallCart).
+            Register(new CartHandler(),
+                go => {
+                    var cart = go.GetComponent<PhysGrabCart>();
+                    return cart != null && !cart.isSmallCart;
+                }, 0);
             // Items: has ItemAttributes but NOT ValuableObject (valuables matched above with higher list position).
             Register(new ItemHandler(),
                 go => go.GetComponent<ItemAttributes>() != null && go.GetComponent<ValuableObject>() == null, 0);

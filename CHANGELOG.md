@@ -1,12 +1,42 @@
 # Changelog
 
+## 0.4.1
+
+### New
+- Any non-pocketable item becomes pocketable while shrunken — carts, cart cannons, cart lasers, trackers. Press an inventory key to stash, shoot again to restore.
+- Shrunken players can't pocket shrunken items. If you get shrunk while carrying one, it drops automatically.
+
+### Bug fixes
+- Fixed shrunken players being able to wall-jump infinitely by touching walls
+- Fixed Shrink Challenge mode not working on clients (inverted re-shrink was blocked by debug key gate)
+- Fixed Shrink Challenge mode not working in singleplayer (was stuck waiting for voice chat)
+- Fixed Shrink Challenge mode firing in the lobby instead of waiting for the level to load
+- Fixed voice pitch not cleaning up when returning to lobby
+- Fixed camera occasionally clipping through walls at shrunken size
+- Pupil override priority and spring speed now match vanilla ranges
+- Items now stay shrunken permanently until shot again (was 5 minutes)
+- Enemy speed while shrunken is now 75% (was 65%)
+
+### Improvements
+- Shrink Challenge mode config changes apply instantly in the lobby
+- Shrunken items show as smaller dots on the map
+- Smoother pupil transition when expressions end
+- Embedded inventory icons for cart, cart cannon, and cart laser
+- Logging cleaned up — only warnings and errors in the console
+- InvertedMode synced to clients via RPC for proper multiplayer challenge mode
+
 ## 0.4.0
 
 ### New
-- Added `SuppressValueDropExpand` option to ScaleOptions — when true, valuables won't expand on damage while scaled. Essential for cart mods where items bump into each other constantly.
-- Added `ScaleManager.ApplyIfNotScaled()` — scales only if not already scaled, no-op otherwise. Safe to call every frame from continuous triggers like cart enter hooks.
+- Added `SuppressValueDropExpand` option to ScaleOptions — valuables won't expand on damage while scaled. For cart mods where items bump into each other constantly.
+- Added `PreserveMass` option to ScaleOptions — rigidbody mass stays at its original value while scaled. For cart mods where items should weigh the same regardless of visual size.
+- Added `ScaleManager.ApplyIfNotScaled()` — scales only if not already scaled, no-op otherwise. Safe to call every frame from continuous triggers.
 - Added `ScaleManager.GetController()` — returns the ScaleController for a game object, resolving through PlayerShrinkLink.
-- Added `PreserveMass` option to ScaleOptions — when true, rigidbody mass stays at its original value while scaled. Cart mods can shrink items visually without affecting how heavy the cart feels.
+
+### Bug fixes
+- Fixed shrunken objects appearing full-size on non-host clients. The RPC was only sending the target vector without ScaleOptions fields, so clients had all-zero options and the animation never ran. Also broke late-join sync.
+- Fixed shrunken player mesh freezing in place on the host. AnimSpeedMultiplier wasn't synced to clients, so the client sent a zero-speed animation override back via RPC, killing the host's visual position interpolation.
+- Fixed players reverting to full size when another player jumped or tumbled into them. Bonk expand now only triggers when health actually decreases, not on zero-damage contact.
 
 ## 0.3.0
 

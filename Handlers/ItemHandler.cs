@@ -37,6 +37,7 @@ namespace ScalerCore.Handlers
         internal sealed class State
         {
             internal ItemOrb? ItemOrb;
+            internal bool AddedEquippable;
         }
 
         // --- IScaleHandler (for pure items resolved via registry) ---
@@ -50,14 +51,19 @@ namespace ScalerCore.Handlers
 
         public void OnScale(ScaleController ctrl)
         {
-            // Item-specific effect field scaling is handled by the cross-cutting
-            // static methods called from ScaleController.
+            var state = (State?)ctrl.HandlerState;
+            if (state != null)
+                state.AddedEquippable = PocketHelper.InjectEquippable(ctrl);
         }
 
         public void OnRestore(ScaleController ctrl, bool isBonk)
         {
-            // Item-specific effect field restoration is handled by the cross-cutting
-            // static methods called from ScaleController.
+            var state = (State?)ctrl.HandlerState;
+            if (state is { AddedEquippable: true })
+            {
+                PocketHelper.RemoveEquippable(ctrl);
+                state.AddedEquippable = false;
+            }
         }
 
         public void OnUpdate(ScaleController ctrl)

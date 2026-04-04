@@ -69,7 +69,7 @@ namespace ScalerCore.Utilities
                     s.Source.pitch *= mult;
             }
 
-            Plugin.Log.LogInfo($"[SC]   sound pitch x{mult:F2} on {_pitchedSounds.Length} Sound objects under {searchRoot.gameObject.name}");
+            Plugin.Log.LogDebug($"[SC]   sound pitch x{mult:F2} on {_pitchedSounds.Length} Sound objects under {searchRoot.gameObject.name}");
         }
 
         /// <summary>

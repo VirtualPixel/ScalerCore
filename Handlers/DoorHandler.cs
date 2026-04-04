@@ -41,7 +41,7 @@ namespace ScalerCore.Handlers
                 // Lockers, cabinets, etc. have large anchor offsets but no wallTagObjects.
                 state.ShouldBreakOnShrink = anchorDist > AnchorDistanceThreshold && hasWallTags;
 
-                Plugin.Log.LogInfo($"[SC]   Door: hingeAnchorDist={anchorDist:F3}" +
+                Plugin.Log.LogDebug($"[SC]   Door: hingeAnchorDist={anchorDist:F3}" +
                     $"  wallTags={hinge.wallTagObjects?.Length ?? 0}" +
                     $"  willBreak={state.ShouldBreakOnShrink}" +
                     $"  broken={hinge.broken}  dead={hinge.dead}");
@@ -57,7 +57,7 @@ namespace ScalerCore.Handlers
 
             if (state.ShouldBreakOnShrink && !state.Hinge.broken && !state.Hinge.dead)
             {
-                Plugin.Log.LogInfo($"[SC]   Door: breaking hinge on {ctrl._displayName} (anchor too far from origin)");
+                Plugin.Log.LogDebug($"[SC]   Door: breaking hinge on {ctrl._displayName} (anchor too far from origin)");
 
                 // HingeBreakImpulse sets broken=true, plays break sound/FX, changes layers.
                 // But it does NOT destroy the HingeJoint — that only happens when Unity's

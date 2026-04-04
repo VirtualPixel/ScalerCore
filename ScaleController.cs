@@ -62,7 +62,7 @@ namespace ScalerCore
         RoomVolumeCheck? _roomVolumeCheck;
         Vector3 _originalRoomVolumeSize;
         bool       _isItem;       // ItemAttributes present — timer restore only, no bonk expand
-        ItemEquippable? _itemEquippable; // cached — null for non-items
+        internal ItemEquippable? _itemEquippable; // cached — null for non-items
 
         // Cross-cutting item effect scaling state — managed by ItemHandler static utilities.
         internal List<ItemHandler.ScaledField>? _scaledItemFields;
@@ -156,14 +156,18 @@ namespace ScalerCore
                 $"  animTarget={(enemyState?.AnimTarget != null ? enemyState.AnimTarget.gameObject.name : "NONE")}" +
                 $"  navAgent={(enemyState?.NavAgent != null ? "yes" : "no")}");
 
-            // Challenge mode: auto-shrink players at spawn.
-            if (Plugin.ChallengeMode && Handler is PlayerHandler)
+            // Voice pitch in menu lobby: apply or cancel depending on challenge mode.
+            // Deferred because remote PlayerVoiceChat components may not exist yet at Start.
+            if (Handler is PlayerHandler && SemiFunc.RunIsLobbyMenu())
+                StartCoroutine(LobbyPitchDeferred());
+
+            // Challenge mode: auto-shrink players during actual runs.
+            // Deferred via coroutine because voiceChat and Photon aren't ready at Start time.
+            // Only skip the menu lobby — the truck lobby counts as a run.
+            if (Plugin.ChallengeMode && Handler is PlayerHandler
+                && !SemiFunc.RunIsLobbyMenu())
             {
-                var opts = ScaleOptions.Default;
-                opts.InvertedMode = true;
-                opts.Duration = 0f; // permanent
-                DispatchShrink(opts);
-                Plugin.Log.LogInfo($"[SC] Challenge mode: auto-shrunk {_displayName}");
+                StartCoroutine(ChallengeModeDeferred());
             }
         }
 
@@ -235,7 +239,7 @@ namespace ScalerCore
                 if (_animScale == _target)
                 {
                     _transitioning = false;
-                    Plugin.Log.LogInfo($"[SC] LATE_ANIM DONE  {_displayName}  finalScale={_animScale}");
+                    Plugin.Log.LogDebug($"[SC] LATE_ANIM DONE  {_displayName}  finalScale={_animScale}");
                 }
             }
 
@@ -248,7 +252,7 @@ namespace ScalerCore
             if (!isPlayer && !HandlerOwnsScale && IsScaled && !_transitioning && !inInventory)
             {
                 if (_t.localScale != _target)
-                    Plugin.Log.LogWarning($"[SC] LATE_FORCE  {_displayName}  was={_t.localScale}  forcing={_target}");
+                    Plugin.Log.LogDebug($"[SC] LATE_FORCE  {_displayName}  was={_t.localScale}  forcing={_target}");
                 _t.localScale = _target;
             }
         }
@@ -260,7 +264,7 @@ namespace ScalerCore
             base.OnDisable();
             if (!IsScaled || Handler is not Handlers.EnemyHandler) return;
 
-            Plugin.Log.LogInfo($"[SC] DISABLE (despawn) {_displayName}  restoring scale");
+            Plugin.Log.LogDebug($"[SC] DISABLE (despawn) {_displayName}  restoring scale");
 
             _t.localScale  = OriginalScale;
             _animScale     = OriginalScale;
@@ -285,6 +289,10 @@ namespace ScalerCore
             if (IsScaled)
             {
                 _t.localScale = OriginalScale;
+                // Cancel voice pitch so it doesn't persist on the PlayerVoiceChat
+                // component, which survives level changes.
+                var playerState = HandlerState as Handlers.PlayerHandler.State;
+                playerState?.PlayerAvatar.voiceChat?.OverridePitchCancel();
                 Handler?.OnDestroy(this);
             }
             Scaled.Remove(this);
@@ -294,7 +302,7 @@ namespace ScalerCore
 
         public void DispatchShrink(ScaleOptions options)
         {
-            Plugin.Log.LogInfo($"[SC] DispatchShrink ENTER  {_displayName}  instanceID={GetInstanceID()}  IsScaled={IsScaled}  currentScale={_t.localScale}  GO={gameObject.name}");
+            Plugin.Log.LogDebug($"[SC] DispatchShrink ENTER  {_displayName}  instanceID={GetInstanceID()}  IsScaled={IsScaled}  currentScale={_t.localScale}  GO={gameObject.name}");
             if (IsScaled)
             {
                 // Same factor → toggle (restore). Different factor → rescale in place.
@@ -308,7 +316,7 @@ namespace ScalerCore
                     return;
                 }
                 // Different factor: update options and animate to the new target without restoring first.
-                Plugin.Log.LogInfo($"[SC] RESCALE {_displayName}  {_options.Factor} → {options.Factor}");
+                Plugin.Log.LogDebug($"[SC] RESCALE {_displayName}  {_options.Factor} → {options.Factor}");
                 _options = options;
                 _shrinkTimer = _options.Duration;
                 if (_shrinkTimer < 0f) _shrinkTimer = 0f;
@@ -321,7 +329,7 @@ namespace ScalerCore
                 if (_rb != null && !_isItem && !_options.PreserveMass)
                     _rb.mass = Mathf.Clamp(_originalMass * rf, 0.5f, _options.MassCap);
                 if (_networkPV != null && PhotonNetwork.InRoom)
-                    _networkPV.RPC(nameof(RPC_Shrink), RpcTarget.Others, newTarget);
+                    _networkPV.RPC(nameof(RPC_Shrink), RpcTarget.Others, newTarget, PackOpts(), PackBools());
                 return;
             }
             // Guard against bare `new ScaleOptions()` (all zeroes) — fall back to defaults for critical fields.
@@ -345,24 +353,26 @@ namespace ScalerCore
             _bonkImmuneTimer = Mathf.Max(animTime, _options.BonkImmuneDuration);
 
             ApplyScale(target);
-            SetForceGrabPoint(false);
 
-            // Scale extraction detection box so shrunken items don't register as in-zone
+            // Only disable ForceGrabPoint when shrinking — enlarged items don't need it.
+            if (f < 1f) SetForceGrabPoint(false);
+
+            // Scale extraction detection box
             if (_roomVolumeCheck != null)
                 _roomVolumeCheck.currentSize = _originalRoomVolumeSize * f;
 
             if (_networkPV != null && PhotonNetwork.InRoom)
             {
-                Plugin.Log.LogInfo($"[SC] RPC_Shrink SEND  viewID={_networkPV.ViewID}  isMine={_networkPV.IsMine}  target={target}");
-                _networkPV.RPC(nameof(RPC_Shrink), RpcTarget.Others, target);
+                Plugin.Log.LogDebug($"[SC] RPC_Shrink SEND  {_displayName}  viewID={_networkPV.ViewID}  isMine={_networkPV.IsMine}  target={target}");
+                _networkPV.RPC(nameof(RPC_Shrink), RpcTarget.Others, target, PackOpts(), PackBools());
             }
             else
             {
-                Plugin.Log.LogInfo($"[SC] RPC_Shrink SKIP  networkPV={(_networkPV == null ? "null" : "set")}  inRoom={PhotonNetwork.InRoom}");
+                Plugin.Log.LogDebug($"[SC] RPC_Shrink SKIP  {_displayName}  networkPV={(_networkPV == null ? "null" : "set")}  inRoom={PhotonNetwork.InRoom}");
             }
             AssetManager.instance?.PhysImpactEffect(_t.position);
 
-            Plugin.Log.LogInfo($"[SC] SHRINK {_displayName}" +
+            Plugin.Log.LogDebug($"[SC] SHRINK {_displayName}" +
                 $"  factor={_options.Factor}" +
                 $"  scale {OriginalScale} → {target}" +
                 $"  animTime={animDist / (animSpeed > 0f ? animSpeed : 1f):F2}s" +
@@ -376,16 +386,15 @@ namespace ScalerCore
                 // below ~0.5 causes violent oscillation when held.
                 if (!_isItem && !_options.PreserveMass)
                     _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, _options.MassCap);
-                Plugin.Log.LogInfo($"[SC]   mass {_originalMass:F3} → {_rb.mass:F3}  (cap={_options.MassCap:F2}  originalMass locked at {_originalMass:F3})");
+                Plugin.Log.LogDebug($"[SC]   mass {_originalMass:F3} → {_rb.mass:F3}  (cap={_options.MassCap:F2}  originalMass locked at {_originalMass:F3})");
             }
 
             // Handler-specific shrink logic (enemy nav/grab, player voice/camera, etc.)
             Handler?.OnScale(this);
 
             // Brief indestructibility after shrinking prevents fall damage from the
-            // slight drop when colliders resize. The game's built-in indestructible
-            // timer on PhysGrabObject suppresses all impact damage for the duration.
-            if (_physGrabObject != null && Handler is Handlers.ValuableHandler)
+            // slight drop when colliders resize. Only needed when shrinking.
+            if (f < 1f && _physGrabObject != null && Handler is Handlers.ValuableHandler)
                 _physGrabObject.OverrideIndestructible(0.5f);
 
             // Pitch all Sound objects for this entity.
@@ -394,6 +403,9 @@ namespace ScalerCore
 
             // Scale item-specific effect fields (explosion size, orb radius, etc.) — cross-cutting.
             _scaledItemFields = ItemHandler.OnShrinkFields(this, _options.Factor);
+
+            // Shrink the map icon to match.
+            ScaleMapIcon(f);
         }
 
         public void DispatchExpand()
@@ -403,7 +415,7 @@ namespace ScalerCore
             Scaled.Remove(this);
 
             float sizeNow = OriginalScale.x > 0f ? _t.localScale.x / OriginalScale.x : 0f;
-            Plugin.Log.LogInfo($"[SC] EXPAND (timer/shot) {_displayName}" +
+            Plugin.Log.LogDebug($"[SC] EXPAND (timer/shot) {_displayName}" +
                 $"  currentSize={sizeNow * 100f:F0}%" +
                 $"  mass {(_rb != null ? _rb.mass.ToString("F3") : "N/A")} → {_originalMass:F3}");
 
@@ -422,6 +434,7 @@ namespace ScalerCore
             _audioPitch.RestorePitch();
             ItemHandler.OnRestoreFields(_scaledItemFields);
             _scaledItemFields = null;
+            ScaleMapIcon(1f);
         }
 
         // Instant restore — no animation. Used for bonk.
@@ -430,7 +443,7 @@ namespace ScalerCore
             if (!IsScaled) return;
             if (_bonkImmuneTimer > 0f)
             {
-                Plugin.Log.LogInfo($"[SC] BONK BLOCKED {_displayName}  immune={_bonkImmuneTimer:F2}s remaining");
+                Plugin.Log.LogDebug($"[SC] BONK BLOCKED {_displayName}  immune={_bonkImmuneTimer:F2}s remaining");
                 return;
             }
             IsScaled = false;
@@ -438,7 +451,7 @@ namespace ScalerCore
             Scaled.Remove(this);
 
             float sizeNow = OriginalScale.x > 0f ? _t.localScale.x / OriginalScale.x : 0f;
-            Plugin.Log.LogInfo($"[SC] EXPAND (bonk/instant) {_displayName}" +
+            Plugin.Log.LogDebug($"[SC] EXPAND (bonk/instant) {_displayName}" +
                 $"  currentSize={sizeNow * 100f:F0}%" +
                 $"  mass {(_rb != null ? _rb.mass.ToString("F3") : "N/A")} → {_originalMass:F3}");
 
@@ -458,6 +471,7 @@ namespace ScalerCore
             _audioPitch.RestorePitch();
             ItemHandler.OnRestoreFields(_scaledItemFields);
             _scaledItemFields = null;
+            ScaleMapIcon(1f);
         }
 
 
@@ -471,6 +485,16 @@ namespace ScalerCore
                 if (_playerBounceAnim != null) StopCoroutine(_playerBounceAnim);
                 _playerBounceAnim = StartCoroutine(PlayerBounceAnim(_t.localScale, target));
             }
+        }
+
+        // Scale the map icon dot to match the shrunken size.
+        // factor=1 restores to original, factor<1 shrinks the dot.
+        void ScaleMapIcon(float factor)
+        {
+            var mapCustom = GetComponent<MapCustom>();
+            if (mapCustom == null) mapCustom = GetComponentInParent<MapCustom>();
+            if (mapCustom?.mapCustomEntity != null)
+                mapCustom.mapCustomEntity.transform.localScale = Vector3.one * Mathf.Max(factor, 0.3f);
         }
 
         // Melee weapons use a forceGrabPoint child to position the item in-hand.
@@ -508,31 +532,88 @@ namespace ScalerCore
             _playerBounceAnim = null;
         }
 
+        System.Collections.IEnumerator ChallengeModeDeferred()
+        {
+            // Wait for level generation. In multiplayer, also wait for voice chat
+            // so the pitch override works. Singleplayer has no voice chat.
+            while (LevelGenerator.Instance == null || !LevelGenerator.Instance.Generated)
+                yield return null;
+            if (SemiFunc.IsMultiplayer())
+            {
+                var playerState = HandlerState as Handlers.PlayerHandler.State;
+                while (playerState?.PlayerAvatar.voiceChat == null)
+                    yield return null;
+            }
+
+            if (!IsScaled && SemiFunc.IsMasterClientOrSingleplayer())
+            {
+                var opts = ScaleOptions.Default;
+                opts.InvertedMode = true;
+                opts.Duration = 0f;
+                DispatchShrink(opts);
+            }
+        }
+
+        System.Collections.IEnumerator LobbyPitchDeferred()
+        {
+            // Wait a bit for all PlayerVoiceChat components to be created and linked.
+            for (int i = 0; i < 10; i++)
+                yield return null;
+
+            foreach (var vc in Object.FindObjectsOfType<PlayerVoiceChat>())
+            {
+                if (Plugin.ChallengeMode)
+                    vc.OverridePitch(1.3f, 0.2f, 0.5f, 9999f);
+                else
+                    vc.OverridePitchCancel();
+            }
+        }
+
         // --- client receivers ---
         // These run on non-host clients. They mirror the host's IsScaled/Scaled state so
         // pitch and any client-side logic that checks IsScaled work correctly.
 
+        float[] PackOpts() => new[] {
+            _options.Factor, _options.Speed, _options.MassCap,
+            _options.SpeedFactor, _options.AnimSpeedMultiplier,
+            _options.FootstepPitchMultiplier, _options.BonkImmuneDuration
+        };
+
+        bool[] PackBools() => new[] { _options.PreserveMass, _options.InvertedMode };
+
         [PunRPC]
-        void RPC_Shrink(Vector3 target)
+        void RPC_Shrink(Vector3 target, float[] opts, bool[] flags)
         {
-            Plugin.Log.LogInfo($"[SC] RPC_Shrink RECV  {_displayName}  target={target}");
+            Plugin.Log.LogDebug($"[SC] RPC_Shrink RECV  {_displayName}  target={target}  factor={opts[0]}  speed={opts[1]}  handler={Handler?.GetType().Name ?? "null"}");
+            _options.Factor                = opts[0];
+            _options.Speed                 = opts[1];
+            _options.MassCap               = opts[2];
+            _options.SpeedFactor           = opts[3];
+            _options.AnimSpeedMultiplier   = opts[4];
+            _options.FootstepPitchMultiplier = opts[5];
+            _options.BonkImmuneDuration    = opts[6];
+            _options.PreserveMass          = flags[0];
+            _options.InvertedMode          = flags[1];
+            _invertedActive = flags[1];
+            float f = _options.Factor;
             IsScaled = true;
             Scaled.Add(this);
-            if (_rb != null && !_isItem && !_options.PreserveMass) _rb.mass = Mathf.Clamp(_originalMass * _options.Factor, 0.5f, _options.MassCap);
-            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize * _options.Factor;
+            if (_rb != null && !_isItem && !_options.PreserveMass) _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, _options.MassCap);
+            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize * f;
             ApplyScale(target);
-            SetForceGrabPoint(false);
+            if (f < 1f) SetForceGrabPoint(false);
             AssetManager.instance?.PhysImpactEffect(_t.position);
             var ep = GetComponentInParent<EnemyParent>();
-            _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, _options.Factor);
-            _scaledItemFields = ItemHandler.OnShrinkFields(this, _options.Factor);
+            _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, f);
+            _scaledItemFields = ItemHandler.OnShrinkFields(this, f);
 
             // Handler-specific client-side shrink (player voice/camera, etc.)
             Handler?.OnScale(this);
 
-            // Match host-side indestructibility for valuables.
-            if (_physGrabObject != null && Handler is Handlers.ValuableHandler)
+            // Match host-side indestructibility for valuables (shrink only).
+            if (f < 1f && _physGrabObject != null && Handler is Handlers.ValuableHandler)
                 _physGrabObject.OverrideIndestructible(0.5f);
+            ScaleMapIcon(f);
         }
 
         [PunRPC]
@@ -552,6 +633,7 @@ namespace ScalerCore
 
             // Handler-specific client-side restore (player voice/camera, etc.)
             Handler?.OnRestore(this, isBonk: false);
+            ScaleMapIcon(1f);
         }
 
         [PunRPC]
@@ -590,8 +672,19 @@ namespace ScalerCore
             }
             else if (_networkPV != null && _networkPV.IsMine && PhotonNetwork.InRoom)
             {
-                _networkPV.RPC(nameof(RPC_RequestShrink), RpcTarget.MasterClient);
+                _networkPV.RPC(nameof(RPC_RequestInvertedReshrink), RpcTarget.MasterClient);
             }
+        }
+
+        [PunRPC]
+        void RPC_RequestInvertedReshrink()
+        {
+            if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            if (IsScaled || !_invertedActive) return;
+            var opts = ScaleOptions.Default;
+            opts.InvertedMode = true;
+            opts.Duration = 0f;
+            DispatchShrink(opts);
         }
 
         // Called when the local player presses F10 to manually unshrink.
@@ -662,6 +755,10 @@ namespace ScalerCore
                 ItemHandler.OnRestoreFields(ctrl._scaledItemFields);
                 ctrl._scaledItemFields = null;
 
+                // Cancel voice pitch so it doesn't leak into the lobby.
+                var playerState = ctrl.HandlerState as Handlers.PlayerHandler.State;
+                playerState?.PlayerAvatar.voiceChat?.OverridePitchCancel();
+
                 // Handler-specific cleanup.
                 ctrl.Handler?.OnRestore(ctrl, isBonk: false);
 
@@ -674,24 +771,8 @@ namespace ScalerCore
             }
             Scaled.Clear();
 
-            // Challenge mode: re-shrink all players after cleanup.
-            if (Plugin.ChallengeMode)
-                ReapplyChallengeMode();
-        }
-
-        static void ReapplyChallengeMode()
-        {
-            if (GameDirector.instance?.PlayerList == null) return;
-            var opts = ScaleOptions.Default;
-            opts.InvertedMode = true;
-            opts.Duration = 0f;
-            foreach (var player in GameDirector.instance.PlayerList)
-            {
-                if (player == null || player.isDisabled) continue;
-                var ctrl = player.GetComponent<ScaleController>();
-                if (ctrl == null) continue;
-                ctrl.DispatchShrink(opts);
-            }
+            // Challenge mode re-shrink is handled by ChallengeModeDeferred in Start()
+            // when new player ScaleControllers are created for the next level.
         }
 
         // Re-register after joining so Photon's internal initialization (which may rebuild the
@@ -707,9 +788,15 @@ namespace ScalerCore
         public override void OnPlayerEnteredRoom(Player newPlayer)
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+            // Re-apply challenge mode lobby pitch when a new player joins.
+            // Their voice chat won't exist yet, so defer a few frames.
+            if (Plugin.ChallengeMode && Handler is Handlers.PlayerHandler)
+                StartCoroutine(LobbyPitchDeferred());
+
             if (!IsScaled) return;
             if (_networkPV == null) return;
-            _networkPV.RPC(nameof(RPC_Shrink), newPlayer, _target);
+            _networkPV.RPC(nameof(RPC_Shrink), newPlayer, _target, PackOpts(), PackBools());
         }
     }
 }
