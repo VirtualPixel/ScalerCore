@@ -2,10 +2,6 @@
 
 ## 0.4.3
 
-- Re-release of 0.4.2 with corrected packaging
-
-## 0.4.2
-
 ### New
 - `MapCollapse` is now public — other mods call `MapCollapse.OnMapHit()` to trigger the collapse event
 - `ScaleController.ChallengeMode` public property — implementations set this to enable challenge mode
