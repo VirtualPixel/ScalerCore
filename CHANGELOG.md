@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3
+
+- Re-release of 0.4.2 with corrected packaging
+
 ## 0.4.2
 
 ### New

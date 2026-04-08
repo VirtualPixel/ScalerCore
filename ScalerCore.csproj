@@ -5,7 +5,7 @@
     <LangVersion>12</LangVersion>
     <Nullable>enable</Nullable>
     <Authors>Vippy</Authors>
-    <Version>0.4.2</Version>
+    <Version>0.4.3</Version>
     <OutputPath>C:\Users\wells\AppData\Roaming\com.kesomannen.gale\repo\profiles\Development\BepInEx\plugins\ScalerCore\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
