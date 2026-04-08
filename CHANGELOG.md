@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.2
+
+### New
+- `MapCollapse` is now public — other mods call `MapCollapse.OnMapHit()` to trigger the collapse event
+- `ScaleController.ChallengeMode` public property — implementations set this to enable challenge mode
+- Runtime `SemiIconMaker` generation for pocketed items — no more embedded PNGs, works for any item
+
+### Bug fixes
+- Fixed map collapse audio ignoring master volume (now routes through the game's SFX mixer group)
+- Fixed map collapse alarm doubling when the truck had no unique sounds
+- Fixed camera glitch effect not covering the full screen while shrunken
+- Fixed shrunken players getting crushed too early during map collapse (raycast distances now scale with player size)
+- Fixed pocketed item icons disappearing after level transitions
+- Map collapse crush sequence reworked — FOV slam, heavy shake, vignette, and a brief hold before death
+
+### Improvements
+- ScalerCore is now a pure library with no user-facing config entries
+- `ShrinkChallengeMode` and `MapCollapse` config removed — implementations own their settings
+- `MapCollapseHitPatch` removed — implementations provide their own hit detection
+- Map collapse enemy speed toned down (1.3x base, up to 1.8x — was 2.5x to 6.5x)
+- Map collapse no longer unshrinks everything when it starts
+- Map collapse FOV narrows during collapse for a claustrophobic feel
+- Embedded cart/cannon/laser icon PNGs replaced with runtime SemiIconMaker
+
 ## 0.4.1
 
 ### New

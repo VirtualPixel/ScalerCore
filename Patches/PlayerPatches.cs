@@ -224,6 +224,31 @@ namespace ScalerCore
         }
     }
 
+    // --- camera glitch: scale quad to fill screen when player is shrunken ---
+    // CameraGlitch is a world-space quad that scales by FOV ratio. When the player
+    // is shrunken the quad doesn't cover the full viewport. Multiply by inverse
+    // player scale so the quad grows to compensate.
+
+    [HarmonyPatch(typeof(CameraGlitch), "Update")]
+    internal static class CameraGlitchScalePatch
+    {
+        static void Postfix(CameraGlitch __instance)
+        {
+            var player = PlayerAvatar.instance;
+            if (player == null) return;
+            var ctrl = player.GetComponent<ScaleController>();
+            if (ctrl == null || !ctrl.IsScaled) return;
+
+            float factor = ctrl.OriginalScale.x > 0f
+                ? ctrl._t.localScale.x / ctrl.OriginalScale.x
+                : 1f;
+            if (factor >= 1f || factor <= 0f) return;
+
+            // scale up the quad by 1/factor so it fills the shrunken player's view
+            __instance.transform.localScale /= factor;
+        }
+    }
+
     // --- footstep pitch: shrunken players get higher-pitched footstep sounds ---
 
     [HarmonyPatch(typeof(PlayerAvatar), nameof(PlayerAvatar.Footstep))]

@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using UnityEngine;
 
 namespace ScalerCore.Handlers
@@ -14,15 +10,6 @@ namespace ScalerCore.Handlers
     /// </summary>
     internal static class PocketHelper
     {
-        static readonly Dictionary<string, Sprite> _iconCache = new();
-
-        // Maps item name substrings to embedded resource filenames.
-        static readonly (string match, string resource)[] _iconMap = {
-            ("Cart Laser",  "CartLaserIcon.png"),
-            ("Cart Cannon", "CartCannonIcon.png"),
-            ("Cart",        "CartIcon.png"),
-        };
-
         /// <summary>
         /// If the object doesn't already have ItemEquippable, adds one and wires up
         /// the ScaleController cache and Photon RPC table. Returns true if a component
@@ -55,17 +42,15 @@ namespace ScalerCore.Handlers
 
             ctrl._networkPV?.RefreshRpcMonoBehaviourCache();
 
-            // Try to get an icon for the inventory slot. ItemAttributes.GenerateIcon
-            // already ran at Start and skipped because there was no ItemEquippable yet.
-            if (attrs.icon == null)
-            {
-                // Re-run the game's own icon generator in case the prefab has a SemiIconMaker.
-                attrs.itemEquippable = equippable;
-                attrs.StartCoroutine(attrs.GenerateIcon());
+            // Add a SemiIconMaker if the item doesn't have one, so the game's
+            // own GenerateIcon produces a proper inventory icon automatically.
+            if (ctrl.GetComponentInChildren<SemiIconMaker>(true) == null)
+                CreateIconMaker(ctrl.gameObject);
 
-                // Fall back to our embedded icons matched by item name.
-                attrs.icon = FindEmbeddedIcon(ctrl.gameObject.name);
-            }
+            // Wire up and trigger icon generation.
+            attrs.itemEquippable = equippable;
+            attrs.icon = null;
+            attrs.StartCoroutine(attrs.GenerateIcon());
 
             Plugin.Log.LogDebug($"[SC] PocketHelper: injected ItemEquippable on {ctrl._displayName}");
             return true;
@@ -84,55 +69,77 @@ namespace ScalerCore.Handlers
 
             Object.Destroy(equippable);
             ctrl._itemEquippable = null;
+
+            // Clear the game's cached reference so GenerateIcon doesn't fire
+            // again with a stale equippable reference.
+            var attrs = ctrl.GetComponent<ItemAttributes>();
+            if (attrs != null)
+            {
+                attrs.itemEquippable = null;
+                attrs.icon = null;
+            }
+
             ctrl._networkPV?.RefreshRpcMonoBehaviourCache();
             Plugin.Log.LogDebug($"[SC] PocketHelper: removed ItemEquippable from {ctrl._displayName}");
         }
 
         /// <summary>
-        /// Finds the best matching embedded icon for an item by name.
-        /// Checks longer matches first so "Cart Laser" matches before "Cart".
+        /// Creates a SemiIconMaker child with a camera that frames the item.
+        /// Uses renderer bounds to position the camera at a 3/4 angle matching
+        /// vanilla pocket cart style. Per-item overrides can be added here
+        /// for items that need custom framing.
         /// </summary>
-        static Sprite? FindEmbeddedIcon(string itemName)
+        static void CreateIconMaker(GameObject item)
         {
-            foreach (var (match, resource) in _iconMap)
+            // Calculate bounds from mesh/skinned renderers only — particle systems
+            // and trail renderers inflate bounds wildly.
+            Bounds? maybeBounds = null;
+            foreach (var r in item.GetComponentsInChildren<Renderer>(true))
             {
-                if (itemName.IndexOf(match, System.StringComparison.OrdinalIgnoreCase) < 0)
-                    continue;
-                return LoadEmbeddedIcon(resource);
+                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer) continue;
+                if (maybeBounds == null)
+                    maybeBounds = r.bounds;
+                else
+                {
+                    var b = maybeBounds.Value;
+                    b.Encapsulate(r.bounds);
+                    maybeBounds = b;
+                }
             }
-            return null;
-        }
+            if (maybeBounds == null) return;
+            var bounds = maybeBounds.Value;
 
-        /// <summary>
-        /// Loads a PNG from the DLL's embedded resources by filename. Cached.
-        /// </summary>
-        static Sprite? LoadEmbeddedIcon(string filename)
-        {
-            if (_iconCache.TryGetValue(filename, out var cached))
-                return cached;
+            var go = new GameObject("ScalerCore_IconMaker");
+            go.transform.SetParent(item.transform, false);
 
-            var asm = Assembly.GetExecutingAssembly();
-            var resName = asm.GetManifestResourceNames()
-                .FirstOrDefault(n => n.EndsWith(filename, System.StringComparison.OrdinalIgnoreCase));
-            if (resName == null) return null;
+            var localCenter = item.transform.InverseTransformPoint(bounds.center);
+            float maxExtent = Mathf.Max(bounds.extents.x, bounds.extents.y, bounds.extents.z);
 
-            using var stream = asm.GetManifestResourceStream(resName);
-            if (stream == null) return null;
+            // 3/4 angle: left, slightly above, looking down. FOV widens for larger items.
+            var dir = new Vector3(-0.8f, 0.35f, -1.0f).normalized;
+            float dist = 2.5f;
+            float fov = Mathf.Clamp(27f * Mathf.Max(1f, maxExtent / 0.55f), 27f, 80f);
 
-            using var ms = new MemoryStream();
-            stream.CopyTo(ms);
-            var tex = new Texture2D(2, 2);
-            if (!ImageConversion.LoadImage(tex, ms.ToArray(), false))
-            {
-                Object.Destroy(tex);
-                return null;
-            }
+            go.transform.localPosition = localCenter + dir * dist;
+            var lookTarget = localCenter + new Vector3(0.1f, -0.05f, 0f);
+            go.transform.LookAt(item.transform.TransformPoint(lookTarget));
 
-            var sprite = Sprite.Create(tex,
-                new Rect(0, 0, tex.width, tex.height),
-                new Vector2(0.5f, 0.5f));
-            _iconCache[filename] = sprite;
-            return sprite;
+            var cam = go.AddComponent<Camera>();
+            cam.orthographic = false;
+            cam.fieldOfView = fov;
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane = 100f;
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.192f, 0.302f, 0.475f, 0f);
+            cam.cullingMask = 9502721;
+            cam.enabled = false;
+
+            var rt = new RenderTexture(512, 512, 32, RenderTextureFormat.ARGB32);
+            cam.targetTexture = rt;
+
+            var maker = go.AddComponent<SemiIconMaker>();
+            maker.iconCamera = cam;
+            maker.renderTexture = rt;
         }
     }
 }

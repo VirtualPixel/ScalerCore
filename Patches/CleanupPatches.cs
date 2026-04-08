@@ -8,6 +8,7 @@ namespace ScalerCore
         static void Postfix()
         {
             ScaleManager.CleanupAll();
+            AprilFools.MapCollapse.OnLevelChange();
         }
     }
 }

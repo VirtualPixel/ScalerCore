@@ -28,6 +28,10 @@ namespace ScalerCore
         // Checked on the host when processing RPC requests.
         public static bool AllowManualScale = true;
 
+        // Challenge mode: players start shrunken, guns grow them, damage re-shrinks.
+        // Set by consuming mods (e.g. ShrinkerGun) to enable challenge gameplay.
+        public static bool ChallengeMode { get; set; }
+
         public Transform? ScaleTarget; // visual root to scale; null = own transform
 
         public Vector3 OriginalScale { get; internal set; }
@@ -164,7 +168,7 @@ namespace ScalerCore
             // Challenge mode: auto-shrink players during actual runs.
             // Deferred via coroutine because voiceChat and Photon aren't ready at Start time.
             // Only skip the menu lobby — the truck lobby counts as a run.
-            if (Plugin.ChallengeMode && Handler is PlayerHandler
+            if (ChallengeMode && Handler is PlayerHandler
                 && !SemiFunc.RunIsLobbyMenu())
             {
                 StartCoroutine(ChallengeModeDeferred());
@@ -562,7 +566,7 @@ namespace ScalerCore
 
             foreach (var vc in Object.FindObjectsOfType<PlayerVoiceChat>())
             {
-                if (Plugin.ChallengeMode)
+                if (ChallengeMode)
                     vc.OverridePitch(1.3f, 0.2f, 0.5f, 9999f);
                 else
                     vc.OverridePitchCancel();
@@ -791,7 +795,7 @@ namespace ScalerCore
 
             // Re-apply challenge mode lobby pitch when a new player joins.
             // Their voice chat won't exist yet, so defer a few frames.
-            if (Plugin.ChallengeMode && Handler is Handlers.PlayerHandler)
+            if (ChallengeMode && Handler is Handlers.PlayerHandler)
                 StartCoroutine(LobbyPitchDeferred());
 
             if (!IsScaled) return;
