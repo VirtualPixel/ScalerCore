@@ -24,6 +24,13 @@
 - Map collapse FOV narrows during collapse for a claustrophobic feel
 - Embedded cart/cannon/laser icon PNGs replaced with runtime SemiIconMaker
 
+## 0.4.2
+
+### Improvements
+- Added MapCollapse config option (Auto/On/Off). You'll know it when you see it. Turn it on and shoot the map, go ahead, I dare you.
+- No, Loom's arms still aren't fixed. I was busy with the super ultra important above feature for next year's april fools.
+- Removed Herobrine
+
 ## 0.4.1
 
 ### New
