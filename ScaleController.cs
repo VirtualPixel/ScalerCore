@@ -306,6 +306,8 @@ namespace ScalerCore
 
         public void DispatchShrink(ScaleOptions options)
         {
+            if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
             Plugin.Log.LogDebug($"[SC] DispatchShrink ENTER  {_displayName}  instanceID={GetInstanceID()}  IsScaled={IsScaled}  currentScale={_t.localScale}  GO={gameObject.name}");
             if (IsScaled)
             {
@@ -414,6 +416,7 @@ namespace ScalerCore
 
         public void DispatchExpand()
         {
+            if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             if (!IsScaled) return;
             IsScaled = false;
             Scaled.Remove(this);
@@ -444,6 +447,7 @@ namespace ScalerCore
         // Instant restore — no animation. Used for bonk.
         public void DispatchExpandNow()
         {
+            if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             if (!IsScaled) return;
             if (_bonkImmuneTimer > 0f)
             {
