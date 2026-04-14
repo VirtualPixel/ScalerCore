@@ -186,13 +186,7 @@ ScaleManager.Apply(target, opts); // skips players and items
 
 ## Configuration
 
-ScalerCore has one user-facing setting in `ScalerCore.cfg`:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ShrinkChallengeMode` | `false` | Players start shrunken. Guns temporarily grow you; damage shrinks you back. Can be toggled live. |
-
-All scaling behavior (factor, speed, duration, etc.) is controlled per-call via `ScaleOptions` -- consuming mods expose whatever settings make sense for them.
+ScalerCore is a pure library with no user-facing config. All scaling behavior (factor, speed, duration, etc.) is controlled per-call via `ScaleOptions` -- consuming mods expose whatever settings make sense for them.
 
 ## What ScalerCore Handles
 

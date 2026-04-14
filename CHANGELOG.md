@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.4
+
+### Bug fixes
+- Fixed non-host clients running Dispatch methods (DispatchShrink, DispatchExpand, DispatchExpandNow) — these are now gated behind a host/singleplayer check
+
 ## 0.4.3
 
 ### New

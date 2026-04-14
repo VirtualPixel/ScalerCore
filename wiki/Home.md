@@ -19,7 +19,7 @@ Basic usage:
 ```csharp
 using ScalerCore;
 
-// Shrink (uses configured ShrinkFactor, default 0.4)
+// Shrink with default options (40% scale)
 ScaleManager.Apply(targetGameObject);
 
 // Restore with animation
@@ -87,6 +87,9 @@ The registry checks predicates in descending priority order. First match wins.
 |--------|-------------|
 | `Apply(GameObject target)` | Scale with default options (ScaleOptions.Default). |
 | `Apply(GameObject target, ScaleOptions options)` | Scale with custom options. Same factor toggles; different factor rescales. |
+| `ApplyIfNotScaled(GameObject target)` | Scale only if not already scaled. No-op if already scaled. |
+| `ApplyIfNotScaled(GameObject target, ScaleOptions options)` | Same with custom options. Ideal for cart mods and continuous triggers. |
+| `GetController(GameObject target)` | Get the ScaleController for a game object (resolves through PlayerShrinkLink). Returns null if none. |
 | `Restore(GameObject target)` | Restore with smooth animation. |
 | `RestoreImmediate(GameObject target)` | Restore instantly (respects bonk immunity timer). |
 | `IsScaled(GameObject target)` | Returns true if currently scaled. |
@@ -136,23 +139,18 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` an
 | `Duration` | `0` | Seconds until auto-restore (0 = permanent) |
 | `Speed` | `2.0` | Scale animation speed |
 | `BonkImmuneDuration` | `5.0` | Grace period after scaling before damage can restore |
-| `MassCap` | `5.0` | Max rigidbody mass while scaled |
-| `SpeedFactor` | `0.65` | Enemy NavMesh speed multiplier |
-| `DamageMultiplier` | `0.1` | Damage dealt by scaled enemies |
+| `MassCap` | `50.0` | Max rigidbody mass while scaled |
+| `SpeedFactor` | `0.75` | Enemy NavMesh speed multiplier |
 | `AnimSpeedMultiplier` | `1.5` | Player animation speed while scaled |
 | `FootstepPitchMultiplier` | `1.5` | Player footstep pitch while scaled |
 | `AllowedTargets` | `All` | Flags: `Players`, `Enemies`, `Items`, `Valuables`, `All` |
 | `InvertedMode` | `false` | If true, scaled state is the default — bonk temporarily grows back |
+| `SuppressValueDropExpand` | `false` | If true, valuables won't restore on damage while scaled (for cart mods) |
+| `PreserveMass` | `false` | If true, rigidbody mass stays at original value while scaled (for cart mods) |
 
 ## Configuration
 
-ScalerCore has one user-facing setting in `ScalerCore.cfg`:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ShrinkChallengeMode` | `false` | Players start shrunken. Guns temporarily grow you; damage shrinks you back. |
-
-Scaling behavior is controlled per-call via `ScaleOptions` — consuming mods expose whatever settings make sense for them.
+ScalerCore is a pure library with no user-facing config. Scaling behavior is controlled per-call via `ScaleOptions` — consuming mods expose whatever settings make sense for them.
 
 ## What ScalerCore Handles Automatically
 
