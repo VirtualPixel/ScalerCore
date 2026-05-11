@@ -2,6 +2,8 @@
 
 A scaling library for [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/) modders. Handles the hard parts of scaling game objects -- physics, audio, animation, colliders, NavMesh, multiplayer sync -- so you don't have to.
 
+> **v0.5.1: v0.4 content support and follow-up fixes.** Cosmetic boxes shrink. `ItemVehicle` shrinks, drives correctly when small, gets proper inventory icons when pocketed, and respects the shrunken-player pocketing block that already applied to carts. Carts no longer vanish on repeated shrink/unshrink.
+
 If you're building a mod that changes the size of things (shrink rays, growth potions, whatever), ScalerCore gives you a clean API and takes care of the edge cases.
 
 <img src="https://raw.githubusercontent.com/VirtualPixel/ScalerCore/main/media/map_chaos.gif" width="800">
@@ -129,7 +131,7 @@ Attached automatically to game objects. Key public members:
 | `OriginalScale` | The object's scale before any modification. |
 | `TargetType` | What kind of object this is (`ScaleTargets.Players`, `.Enemies`, etc.). |
 | `ScaleTarget` | Override in handler's `Setup` to scale a different transform than the controller's. |
-| `AllowManualScale` | Static bool — gates debug shrink/expand requests. Host sets it. |
+| `AllowManualScale` | Static bool, gates debug shrink/expand requests. Host sets it. |
 | `RequestBonkExpand()` | Client-safe expand request (sends RPC to host if called on non-host). |
 | `RequestManualExpand()` | Manual expand (skips bonk immunity). |
 | `RequestManualShrink()` | Manual shrink request. |
@@ -170,7 +172,7 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as
 | `AnimSpeedMultiplier` | `1.5` | Player animation speed while scaled |
 | `FootstepPitchMultiplier` | `1.5` | Player footstep pitch while scaled |
 | `AllowedTargets` | `All` | Flags: `Players`, `Enemies`, `Items`, `Valuables`, `All` |
-| `InvertedMode` | `false` | If true, scaled state is the default — bonk temporarily grows back |
+| `InvertedMode` | `false` | If true, scaled state is the default and bonk temporarily grows back |
 | `SuppressValueDropExpand` | `false` | If true, valuables won't expand when damaged while scaled (for cart mods) |
 | `PreserveMass` | `false` | If true, rigidbody mass stays at original value while scaled (for cart mods) |
 
@@ -228,7 +230,7 @@ For items:
 
 For non-pocketable items (carts, cart cannon, cart laser, tracker):
 - Become pocketable while shrunken (press inventory key to stash)
-- Shrunken players can't pocket shrunken items — if you get shrunk while holding one, it drops
+- Shrunken players can't pocket shrunken items. If you get shrunk while holding one, it drops
 - Restoring removes the equip ability so full-size items stay on the ground
 
 For all types:
@@ -240,7 +242,7 @@ For all types:
 
 ## Known Issues
 
-- Loom (Shadow) arms don't scale proportionally when shrunken (IK solver conflict — cosmetic only, attack distance still scales)
+- Loom (Shadow) arms don't scale proportionally when shrunken (IK solver conflict, cosmetic only, attack distance still scales)
 - Some untested enemy types may float or clip into the ground while shrunken
 
 ## Dependencies

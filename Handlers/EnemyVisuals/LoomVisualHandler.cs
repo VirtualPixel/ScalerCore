@@ -7,10 +7,10 @@ namespace ScalerCore.Handlers.EnemyVisuals
     /// <summary>
     /// Visual handler for Loom (Shadow enemy).
     /// Scales the mesh and adjusts attack distances so the Loom behaves
-    /// proportionally when shrunken. Arm visuals remain a known limitation —
+    /// proportionally when shrunken. Arm visuals remain a known limitation
     /// the game's IK solver (BotSystemSpringPoseAnimator) sets bone world
     /// positions from cached chain lengths that conflict with parent scaling.
-    /// Uses reflection for EnemyShadow fields — direct publicizer access
+    /// Uses reflection for EnemyShadow fields, direct publicizer access
     /// causes NREs in the game's hand logic after shrink/unshrink cycles.
     /// </summary>
     internal class LoomVisualHandler : IEnemyVisualHandler

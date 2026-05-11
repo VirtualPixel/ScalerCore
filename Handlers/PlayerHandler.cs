@@ -96,7 +96,7 @@ namespace ScalerCore.Handlers
                 PlayerAvatar = pa
             };
 
-            // For players, the visible mesh lives on PlayerAvatarVisuals GO — a completely
+            // For players, the visible mesh lives on PlayerAvatarVisuals GO, a completely
             // separate transform from PlayerAvatar GO. PlayerAvatarVisuals manually copies
             // position + rotation from PlayerAvatar each Update, but never touches localScale.
             // Retarget _t so our LateUpdate force and transition animation scale the right GO.
@@ -108,7 +108,7 @@ namespace ScalerCore.Handlers
                 ctrl._animScale    = ctrl.OriginalScale;
                 state.PlayerExpression = pa.playerAvatarVisuals.GetComponent<PlayerExpression>();
 
-                // Menu avatar is cached lazily in LateUpdate — it may not exist at Start time.
+                // Menu avatar is cached lazily in LateUpdate, it may not exist at Start time.
             }
 
             // PlayerAvatarCollision.CollisionTransform is not a child of PlayerAvatar GO,
@@ -127,7 +127,7 @@ namespace ScalerCore.Handlers
                 Plugin.Log.LogWarning($"[SC] PlayerShrinkLink SKIP  pac={pac != null}  collisionXform={(pac?.CollisionTransform != null)}  avatar={ctrl.gameObject.name}");
 
             // Tumble link is attached lazily via PlayerTumbleLinkPatch (PlayerPatches.cs)
-            // because pa.tumble is null at this point — the tumble GO hasn't been
+            // because pa.tumble is null at this point, the tumble GO hasn't been
             // instantiated yet.
 
             ctrl.HandlerState = state;
@@ -453,7 +453,7 @@ namespace ScalerCore.Handlers
                 PhysGrabber.instance.minDistanceFromPlayerOriginal = state.OriginalGrabMinDist * f;
                 Plugin.Log.LogDebug($"[SC] player grab  strength {baseStr:F2}→{PhysGrabber.instance.grabStrength:F2} range {baseRange:F2}→{PhysGrabber.instance.grabRange:F2}  throw {baseThrow:F2}→{PhysGrabber.instance.throwStrength:F2}  minDist {state.OriginalGrabMinDist:F2}→{PhysGrabber.instance.minDistanceFromPlayer:F2}  maxDist {state.OriginalGrabMaxDist:F2}→{PhysGrabber.instance.maxDistanceFromPlayer:F2}");
             }
-            else Plugin.Log.LogWarning("[SC] PhysGrabber.instance null — grab range not scaled");
+            else Plugin.Log.LogWarning("[SC] PhysGrabber.instance null, grab range not scaled");
             float speedMult = Mathf.Lerp(1f, f, 0.5f);
             PlayerController.instance?.OverrideSpeed(speedMult, 9999f);
             if (CameraZoom.Instance != null)
@@ -565,11 +565,10 @@ namespace ScalerCore.Handlers
             if (state == null || StatsManager.instance == null)
                 return (1f, 4f, 0f);
             string steamID = SemiFunc.PlayerGetSteamID(state.PlayerAvatar);
-            if (!StatsManager.instance.playerUpgradeStrength.ContainsKey(steamID))
-                return (1f, 4f, 0f);
-            int strLvl = StatsManager.instance.playerUpgradeStrength[steamID];
-            int rngLvl = StatsManager.instance.playerUpgradeRange[steamID];
-            int thrLvl = StatsManager.instance.playerUpgradeThrow[steamID];
+            var sm = StatsManager.instance;
+            sm.playerUpgradeStrength.TryGetValue(steamID, out int strLvl);
+            sm.playerUpgradeRange.TryGetValue(steamID, out int rngLvl);
+            sm.playerUpgradeThrow.TryGetValue(steamID, out int thrLvl);
             return (1f + strLvl * 0.2f, 4f + rngLvl * 1f, thrLvl * 0.3f);
         }
 

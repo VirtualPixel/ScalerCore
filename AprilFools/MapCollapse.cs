@@ -1,9 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
-using ExitGames.Client.Photon;
 using Photon.Pun;
-using Photon.Realtime;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Audio;
@@ -11,22 +9,20 @@ using UnityEngine.Audio;
 namespace ScalerCore.AprilFools
 {
     // Shrinks the level geometry over 90 seconds when a shrink bullet hits the map.
-    // Synced via Photon RaiseEvent — each client runs the coroutine locally.
+    // Each client runs the coroutine locally; cross-client sync goes through
+    // MapCollapseRelay (a [PunRPC] component piggybacked on PunManager's PhotonView).
     // Implementations call OnMapHit() to trigger; ScalerCore doesn't gate this.
-    public class MapCollapse : MonoBehaviour, IOnEventCallback
+    public class MapCollapse : MonoBehaviour
     {
         const float Factor   = 0.02f;
         const float Duration = 90f;
-        const byte EvtStart   = 198;
-        const byte EvtRequest = 199;
 
-        static MapCollapse? _instance;
+        internal static MapCollapse? _instance;
 
         Transform? _level;
         Vector3 _origScale, _pivot;
         bool _shrinking, _shrunken;
         Coroutine? _routine;
-        bool _registered;
 
         readonly List<(Transform t, Transform parent)> _detached = new();
         readonly List<Light> _lights = new();
@@ -38,47 +34,43 @@ namespace ScalerCore.AprilFools
         GameObject? _alarmGO;
         AudioSource? _loopSrc, _beepSrc, _truckSrc, _sirenSrc;
         AudioClip? _beepClip, _sirenClip;
-        float _nextMsg, _nextGlitch, _nextScare;
+        float _nextMsg, _nextGlitch, _nextScare, _nextTaxmanEmoji;
         bool _lastBlinkOn;
-        int _lastCountdown = -1;
+        int _lastCountdown = -1, _lastTaxmanEmojiIdx = -1, _lastPanic1Idx = -1, _lastPanic2Idx = -1;
         float _origFogEnd, _origFogStart, _origFov;
 
         void Awake() => _instance = this;
 
-        void OnDestroy()
-        {
-            if (_registered) PhotonNetwork.RemoveCallbackTarget(this);
-        }
-
-        void EnsureRegistered()
-        {
-            if (_registered) return;
-            _registered = true;
-            PhotonNetwork.AddCallbackTarget(this);
-        }
-
-        void Update()
-        {
-            if (LevelGenerator.Instance != null && LevelGenerator.Instance.Generated)
-                EnsureRegistered();
-        }
-
         /// <summary>
         /// Trigger the map collapse event. Call from implementation hit patches
-        /// after checking your own config. Safe to call multiple times — ignored
+        /// after checking your own config. Safe to call multiple times . ignored
         /// if a collapse is already running or completed.
         /// </summary>
         public static void OnMapHit()
         {
-            if (_instance == null || _instance._shrinking || _instance._shrunken) return;
-            if (LevelGenerator.Instance == null || !LevelGenerator.Instance.Generated) return;
+            if (!CanStart()) return;
 
-            _instance.EnsureRegistered();
+            // Singleplayer / no PUN room . start the local coroutine directly.
+            if (!SemiFunc.IsMultiplayer())
+            {
+                _instance!.Begin();
+                return;
+            }
+
+            // Multiplayer . go through the relay so every client begins together.
+            // PunManager owns a stable scene PhotonView; piggybacking it lets us
+            // use [PunRPC] method names instead of arbitrary RaiseEvent byte codes.
+            var relay = MapCollapseRelay.EnsureFor(PunManager.instance);
+            if (relay == null)
+            {
+                _instance!.Begin();
+                return;
+            }
+
             if (SemiFunc.IsMasterClientOrSingleplayer())
-                _instance.BroadcastStart();
-            else if (SemiFunc.IsMultiplayer())
-                PhotonNetwork.RaiseEvent(EvtRequest, null,
-                    new RaiseEventOptions { Receivers = ReceiverGroup.MasterClient }, SendOptions.SendReliable);
+                relay.BroadcastStart();
+            else
+                relay.RequestStart();
         }
 
         internal static void OnLevelChange()
@@ -86,26 +78,17 @@ namespace ScalerCore.AprilFools
             if (_instance != null) _instance.Restore();
         }
 
-        // --- network ---------------------------------------------------------
-
-        void BroadcastStart()
+        // Called by MapCollapseRelay's PunRPC handlers and by OnMapHit's local path.
+        internal static bool TryBegin()
         {
-            EnsureRegistered();
-            if (SemiFunc.IsMultiplayer())
-                PhotonNetwork.RaiseEvent(EvtStart, null,
-                    new RaiseEventOptions { Receivers = ReceiverGroup.All }, SendOptions.SendReliable);
-            else
-                Begin();
+            if (!CanStart()) return false;
+            _instance!.Begin();
+            return true;
         }
 
-        public void OnEvent(EventData evt)
-        {
-            if (evt.Code == EvtStart && !_shrinking && !_shrunken)
-                Begin();
-            else if (evt.Code == EvtRequest && SemiFunc.IsMasterClientOrSingleplayer()
-                     && !_shrinking && !_shrunken)
-                BroadcastStart();
-        }
+        static bool CanStart() =>
+            _instance != null && !_instance._shrinking && !_instance._shrunken
+            && LevelGenerator.Instance != null && LevelGenerator.Instance.Generated;
 
         // --- setup -----------------------------------------------------------
 
@@ -119,7 +102,8 @@ namespace ScalerCore.AprilFools
             _pivot     = _level.position;
             _shrinking = true;
             _nextMsg = 0f;
-            _lastCountdown = -1;
+            _nextTaxmanEmoji = 5f;
+            _lastCountdown = _lastTaxmanEmojiIdx = _lastPanic1Idx = _lastPanic2Idx = -1;
 
             if (_routine != null) StopCoroutine(_routine);
             _routine = StartCoroutine(Run());
@@ -292,7 +276,9 @@ namespace ScalerCore.AprilFools
             }
         }
 
-        // --- taxman ----------------------------------------------------------
+        // --- chat lines ------------------------------------------------------
+        // Worded panic messages go to PlayerSay (random player name in the lobby).
+        // Taxman speaks in emojis only . see TaxmanEmoji.
 
         static readonly string[] Panic1 = {
             "IS THE CEILING GETTING LOWER\nOR AM I LOSING IT {:'(}",
@@ -303,6 +289,16 @@ namespace ScalerCore.AprilFools
             "THE BUILDING IS EATING ITSELF\nHOW IS THAT EVEN POSSIBLE {:o}",
             "I CAN HEAR THE WALLS\nSCREAMING {:'(}{:'(}",
             "FORGET THE VALUABLES\nSAVE YOURSELVES {heartbreak}",
+            "WHY DIDNT I LISTEN TO\nMY MOTHER {fedup}",
+            "I HATE THIS JOB\nI HATE THIS JOB {fedup}",
+            "WAIT WAS THAT WALL\nALWAYS THAT CLOSE {:o}",
+            "PLEASE TELL ME YOURE\nSEEING THIS TOO {:(}",
+            "I THINK THE FLOOR\nJUST MOVED {:o}",
+            "DID ANYONE BRING\nA HELMET {:'(}",
+            "MY KNEES ARE GIVING\nOUT {fedup}",
+            "I JUST WANTED TO GO\nHOME TODAY {:'(}",
+            "THE TAXMAN STOPPED\nMAKING SENSE {:'(}",
+            "ARE WE STILL\nGETTING PAID FOR THIS {fedup}",
         };
 
         static readonly string[] Panic2 = {
@@ -311,25 +307,93 @@ namespace ScalerCore.AprilFools
             "I CANT FEEL MY LEGS\nIS THAT NORMAL {:o}",
             "TELL MY WIFE I LOVE\nHER MONEY {:(}",
             "IF YOU CAN READ THIS\nYOU ARE TOO CLOSE {heartbreak}",
+            "THIS IS HOW IT ENDS\nISNT IT {:'(}",
+            "I REGRET EVERYTHING\nEVERYTHING {fedup}",
+            "TELL MOM\nIM SORRY {heartbreak}",
+            "WHY WHY WHY WHY\nWHY {:'(}{:'(}",
+            "LIGHTS OUT BABY\n{skull}{skull}",
+            "WHO BROUGHT THE\nSHRINK GUN {fedup}{fedup}",
+            "MY LAST WILL IS\nUNDER THE MATTRESS {heartbreak}",
         };
 
-        static readonly string[] Countdown = { "10", "9", "8", "7", "6", "5... {:'(}", "4...", "3... GOODBYE {heartbreak}", "2...", "1..." };
+        // Taxman doesn't speak . just reacts. These fire on their own cadence.
+        static readonly string[] TaxmanEmoji = {
+            "{:o}",
+            "{:o}{:o}",
+            "{fedup}",
+            "{:'(}",
+            "{:(}",
+            "{heartbreak}",
+            "{skull}",
+            "{:'(}{fedup}",
+            "{:o}{:'(}",
+            "{:(}{:(}",
+            "{fedup}{fedup}",
+            "{heartbreak}{heartbreak}",
+            "{skull}{skull}",
+            "{:o}{:o}{:o}",
+            "{:'(}{:'(}{:'(}",
+        };
+
+        static readonly string[] Countdown = { "10", "9", "8", "7", "6 {:'(}", "5 {:'(}{:'(}", "4 {fedup}", "3 {heartbreak}", "2 {skull}", "1 {skull}{skull}" };
 
         void TaxmanSay(string msg)
         {
+            // MessageSendCustom routes through MessageSendCustomRPC, which broadcasts
+            // to all clients. Every client runs this coroutine, so without the host
+            // gate the messages stack on every screen (one copy per player in the lobby).
+            if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             var screen = TruckScreenText.instance;
             if (screen == null) return;
             screen.isTyping = false;
             screen.MessageSendCustom("", msg, 2); // empty name = taxman
         }
 
+        // Worded messages come from a random living player in the lobby instead of
+        // the taxman. Same host-only routing reasoning as TaxmanSay.
+        void PlayerSay(string msg)
+        {
+            if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            var screen = TruckScreenText.instance;
+            if (screen == null) return;
+            screen.isTyping = false;
+            var name = PickRandomPlayerName();
+            // Fall back to the taxman if no living player has a name (e.g. everyone
+            // already dead during the final crush) . better to print the message than drop it.
+            screen.MessageSendCustom(name ?? "", msg, 2);
+        }
+
+        static string? PickRandomPlayerName()
+        {
+            var list = GameDirector.instance?.PlayerList;
+            if (list == null || list.Count == 0) return null;
+            var pool = new List<string>(list.Count);
+            foreach (var p in list)
+            {
+                if (p == null || p.isDisabled) continue;
+                var n = p.playerName;
+                if (!string.IsNullOrEmpty(n)) pool.Add(n);
+            }
+            if (pool.Count == 0) return null;
+            return pool[UnityEngine.Random.Range(0, pool.Count)];
+        }
+
+        static int PickIndexNoRepeat(int len, int last)
+        {
+            if (len <= 0) return -1;
+            if (len == 1) return 0;
+            int i;
+            do { i = UnityEngine.Random.Range(0, len); } while (i == last);
+            return i;
+        }
+
         // --- main loop -------------------------------------------------------
 
         IEnumerator Run()
         {
-            // buildup — shake + single soft scare to set the tone
+            // buildup . shake + single soft scare to set the tone
             float buildupStart = Time.time;
-            bool taxmanReacted = false;
+            bool firstReaction = false;
             bool buildupScared = false;
             while (Time.time - buildupStart < 10f && _shrinking)
             {
@@ -349,10 +413,10 @@ namespace ScalerCore.AprilFools
                     AudioScare.instance?.PlaySoft();
                 }
 
-                if (elapsed >= 6f && !taxmanReacted)
+                if (elapsed >= 6f && !firstReaction)
                 {
-                    taxmanReacted = true;
-                    TaxmanSay("...{:o}\n\nDID THE BUILDING JUST\nSHUDDER");
+                    firstReaction = true;
+                    PlayerSay("DID THE BUILDING JUST\nSHUDDER {:o}");
                 }
 
                 yield return null;
@@ -363,10 +427,12 @@ namespace ScalerCore.AprilFools
             SetupLightsAndSound();
             PanicEnemies();
 
-            // let players send the truck — set completed count without triggering
-            // the extraction state machines (which play tube/slam sounds)
+            // let players send the truck . set completed count without triggering
+            // the extraction state machines (which play tube/slam sounds).
+            // Host-only: setting allExtractionPointsCompleted on every client fires
+            // the vanilla truck-arrival cascade (sirens, horn, lights) on each.
             var rd = RoundDirector.instance;
-            if (rd != null)
+            if (rd != null && SemiFunc.IsMasterClientOrSingleplayer())
             {
                 rd.extractionPointsCompleted = rd.extractionPoints;
                 rd.allExtractionPointsCompleted = true;
@@ -383,7 +449,7 @@ namespace ScalerCore.AprilFools
             pendingHinges.RemoveAll(h => h == null || h.broken);
             var pendingObjects = new List<PhysGrabObject>(FindObjectsOfType<PhysGrabObject>());
             pendingObjects.RemoveAll(o => o == null || o.GetComponent<PlayerAvatar>() != null);
-            TaxmanSay("WHAT THE-\nWHAT IS HAPPENING TO THE BUILDING\n{:o}{:o}{:o}");
+            PlayerSay("WHAT THE-\nWHAT IS HAPPENING TO THE BUILDING {:o}{:o}{:o}");
 
             // collapse
             var from = _level!.localScale;
@@ -392,7 +458,6 @@ namespace ScalerCore.AprilFools
             int totalToDestroy = Mathf.Max(pendingHinges.Count, pendingObjects.Count);
             float destroyInterval = totalToDestroy > 0 ? (Duration * 0.8f) / totalToDestroy : 2f;
             destroyInterval = Mathf.Clamp(destroyInterval, 0.2f, 3f);
-            int msgIdx = 0;
             bool killed = false;
 
             while (t < Duration && _shrinking)
@@ -494,7 +559,7 @@ namespace ScalerCore.AprilFools
                     if (crushed || scaleRatio < 0.05f)
                     {
                         killed = true;
-                        TaxmanSay("I CANT STAND UP\nTHE CEILING IS ON MY HEAD {:'(}");
+                        PlayerSay("I CANT STAND UP\nTHE CEILING IS ON MY HEAD {:'(}");
                         yield return StartCoroutine(CrushSequence());
                     }
                 }
@@ -503,15 +568,25 @@ namespace ScalerCore.AprilFools
                 {
                     if (p < 0.8f)
                     {
-                        TaxmanSay(Panic1[msgIdx % Panic1.Length]);
+                        _lastPanic1Idx = PickIndexNoRepeat(Panic1.Length, _lastPanic1Idx);
+                        PlayerSay(Panic1[_lastPanic1Idx]);
                         _nextMsg = t + Mathf.Lerp(10f, 4f, p);
                     }
                     else
                     {
-                        TaxmanSay(Panic2[msgIdx % Panic2.Length]);
+                        _lastPanic2Idx = PickIndexNoRepeat(Panic2.Length, _lastPanic2Idx);
+                        PlayerSay(Panic2[_lastPanic2Idx]);
                         _nextMsg = t + 3f;
                     }
-                    msgIdx++;
+                }
+
+                // Taxman reaction stream . emojis only, fires on a separate cadence
+                // from the player panic messages so the screen feels chatty.
+                if (t >= _nextTaxmanEmoji && !killed)
+                {
+                    _lastTaxmanEmojiIdx = PickIndexNoRepeat(TaxmanEmoji.Length, _lastTaxmanEmojiIdx);
+                    TaxmanSay(TaxmanEmoji[_lastTaxmanEmojiIdx]);
+                    _nextTaxmanEmoji = t + Mathf.Lerp(7f, 3f, p);
                 }
 
                 int left = Mathf.CeilToInt(Duration - t);
@@ -539,7 +614,7 @@ namespace ScalerCore.AprilFools
         {
             var cam = Camera.main;
 
-            // slam FOV down — feels like being compressed
+            // slam FOV down . feels like being compressed
             if (cam != null)
             {
                 float startFov = cam.fieldOfView;
@@ -573,7 +648,7 @@ namespace ScalerCore.AprilFools
             // brief hold so the player feels the crush before dying
             yield return new WaitForSeconds(0.4f);
 
-            TaxmanSay("<color=#FF0000><size=300%><b>CRUSHED</b></size></color>\n{skull}{skull}{skull}");
+            PlayerSay("<color=#FF0000><size=300%><b>WERE CRUSHED</b></size></color>\n{skull}{skull}{skull}");
             if (PlayerController.instance != null)
                 SemiFunc.CameraShakeImpactDistance(PlayerController.instance.transform.position, 30f, 5f, 20f, 100f);
 
@@ -581,6 +656,14 @@ namespace ScalerCore.AprilFools
             {
                 if (avatar == null) continue;
                 AssetManager.instance?.PhysImpactEffect(avatar.transform.position);
+            }
+
+            // PlayerHealth.Hurt routes through HurtRPC. Host-only . otherwise every
+            // client runs the kill loop and the damage stacks on every player.
+            if (!SemiFunc.IsMasterClientOrSingleplayer()) yield break;
+            foreach (var avatar in GetPlayers())
+            {
+                if (avatar == null) continue;
                 var hp = avatar.GetComponent<PlayerHealth>();
                 if (hp != null && hp.health > 0) hp.Hurt(999, false);
             }
@@ -689,7 +772,7 @@ namespace ScalerCore.AprilFools
                 RenderSettings.fogStartDistance = Mathf.Lerp(_origFogStart, 0f, p * p);
             }
 
-            // narrow FOV — sells "walls closing in" instead of "I'm growing"
+            // narrow FOV . sells "walls closing in" instead of "I'm growing"
             var cam = Camera.main;
             if (cam != null)
                 cam.fieldOfView = Mathf.Lerp(_origFov, _origFov * 0.7f, p * p);
@@ -702,7 +785,7 @@ namespace ScalerCore.AprilFools
                 else                { CameraGlitch.Instance.PlayLong();  _nextGlitch = t + Mathf.Lerp(2f, 0.5f, p); }
             }
 
-            // scare stingers — soft early, impacts late
+            // scare stingers . soft early, impacts late
             if (t >= _nextScare && AudioScare.instance != null)
             {
                 if      (p < 0.3f) { AudioScare.instance.PlaySoft();   _nextScare = t + 15f; }

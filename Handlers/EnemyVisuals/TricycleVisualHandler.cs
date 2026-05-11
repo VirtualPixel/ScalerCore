@@ -5,7 +5,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
     /// <summary>
     /// Visual handler for the Tricycle (Bella) enemy.
     /// The rider mesh (AnimTarget) and the trike body (EnemyTricycleVisuals GO)
-    /// are separate visual trees — both need to be scaled.
+    /// are separate visual trees, both need to be scaled.
     /// </summary>
     internal class TricycleVisualHandler : IEnemyVisualHandler
     {

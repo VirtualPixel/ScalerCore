@@ -14,14 +14,22 @@ namespace ScalerCore.Handlers
     /// </summary>
     internal class ItemHandler : IScaleHandler
     {
-        // Item effect scaling: explosion size, radius, force, damage — scaled at shrink, restored at expand.
+        // Item effect scaling: explosion size, radius, force, damage, scaled at shrink, restored at expand.
         // Uses reflection so we don't need hard dependencies on specific item classes.
         internal struct ScaledField { public object comp; public FieldInfo field; public float original; }
 
         // Field names on item components (or referenced ScriptableObjects) that should scale.
+        // Speed-cap fields on vehicles (ItemVehicle, ValuableArcticSnowBike) are scaled so
+        // a half-size vehicle drives at proportionally lower top speed instead of full speed
+        // on a tiny chassis (the source of the "shrunk vehicle is undrivable" feel).
         static readonly string[] _floatFieldsToScale = {
             "explosionSize", "explosionForceMultiplier",
             "orbRadiusMultiplier",
+            // ItemVehicle speed caps
+            "maxSpeedKmh", "softMaxSpeedKmh",
+            "maxForwardSpeed", "maxReverseSpeed", "hyperMaxSpeed",
+            // ValuableArcticSnowBike forward speed
+            "bikeForwardSpeed",
         };
         static readonly string[] _intFieldsToScale = {
             "explosionDamage", "explosionDamageEnemy",
@@ -68,7 +76,7 @@ namespace ScalerCore.Handlers
 
         public void OnUpdate(ScaleController ctrl)
         {
-            // Orb radius: game recalculates orbRadius each frame — override to match shrunken size.
+            // Orb radius: game recalculates orbRadius each frame, override to match shrunken size.
             var state = (State?)ctrl.HandlerState;
             if (state?.ItemOrb != null)
                 OnUpdateOrb(state.ItemOrb, ctrl._options.Factor);
@@ -167,7 +175,7 @@ namespace ScalerCore.Handlers
         }
 
         /// <summary>
-        /// Per-frame orb radius enforcement — game recalculates orbRadius each frame from orbRadiusOriginal * multiplier.
+        /// Per-frame orb radius enforcement, game recalculates orbRadius each frame from orbRadiusOriginal * multiplier.
         /// Override it every frame to keep the effective radius matched to shrunken size.
         /// </summary>
         internal static void OnUpdateOrb(ItemOrb itemOrb, float factor)

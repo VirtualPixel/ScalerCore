@@ -70,10 +70,10 @@ namespace ScalerCore.Handlers.EnemyVisuals
         {
             if (visualState is not HuggerState hugger) return;
 
-            // Scale the Visuals GO directly — NOT Enable (which contains the RB).
+            // Scale the Visuals GO directly, NOT Enable (which contains the RB).
             // ScaleController handles the RB; we handle the visual mesh.
             // Use world-space positioning so the Visuals follow the RB's position
-            // AND rotation — when tipped/knocked over, the offset rotates with the body.
+            // AND rotation, when tipped/knocked over, the offset rotates with the body.
             if (hugger.VisualsTransform != null)
             {
                 hugger.VisualsTransform.localScale = hugger.VisualsOriginalScale * ratio;

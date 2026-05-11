@@ -10,7 +10,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
     {
         public object? Setup(ScaleController ctrl, EnemyHandler.State state, EnemyParent ep)
         {
-            // Default handler needs no extra state — AnimTarget and BtHead are on base State.
+            // Default handler needs no extra state, AnimTarget and BtHead are on base State.
             return null;
         }
 

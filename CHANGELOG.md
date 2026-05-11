@@ -1,16 +1,42 @@
 # Changelog
 
+## 0.5.1
+
+### New v0.4 content support
+- Cosmetic boxes (`CosmeticWorldObject`) are shrinkable. They have `PhysGrabObject` but no `ValuableObject` or `ItemAttributes`, so neither the handler predicates nor the `ScaleController` attach patch matched, added a `CosmeticHandler` and extended `AttachToValuablePatch` to also pick up `CosmeticWorldObject`. Handler tracks `NotValuableObject.healthCurrent` for bonk-on-damage expand, same pattern `ValuableHandler` uses for dollar value.
+- Vehicles now actually shrink visually instead of leaving the mesh full-size with a tiny collider hidden inside. `ItemVehicle.DeparentMesh` runs `meshTransform.SetParent(null, true)` whenever a player sits in the vehicle. The visible mesh becomes a scene-root object that no longer inherits the vehicle's transform scale, while ItemVehicle drives `meshTransform.position` directly each frame. Shrinking the root therefore shrunk the colliders but left a normal-size mesh visibly floating around them; worse, the next time the game ran `ReparentMesh` (`SetParent(originalParent, worldPositionStays: true)`) Unity rewrote the child's localScale to 1/factor to preserve world scale, so when expand fired the mesh ended up at 1/factor times original size. Added a `VehicleHandler` that matches `ItemVehicle` ahead of `ItemHandler` and per-frame enforces `meshTransform.localScale` to track the intended world scale regardless of current parent state. Pocketing is picked up from the same path ItemHandler used.
+- Shrunken vehicles (`ItemVehicle`, `ValuableArcticSnowBike`) now drive at proportionally lower top speed instead of full speed on a tiny chassis. Scaling the transform but leaving `maxSpeedKmh` / `bikeForwardSpeed` at their full 100 / 10 values made a half-size car try to do 100 km/h with full-size forces. Felt like driving a brick on ice. Added vehicle speed-cap fields (`maxSpeedKmh`, `softMaxSpeedKmh`, `maxForwardSpeed`, `maxReverseSpeed`, `hyperMaxSpeed`, `bikeForwardSpeed`) to the existing reflection-based field-scaling pass; they're restored verbatim on expand. Vehicles stay pocketable via the same path they did under ItemHandler.
+
+### Bug fixes
+- Carts vanished on the second shrink. `PocketHelper.CreateIconMaker` was adding a `SemiIconMaker` component on an active GameObject, which fires `OnEnable` synchronously inside `AddComponent`, before we'd assigned `iconCamera` and `renderTexture`. `OnEnable`'s `if (renderTexture)` branch skipped, `renderTextureInstance` stayed null, then the game's `CreateIconFromRenderTexture` NRE'd after teleporting the item to `(-1000, -1000, -1000)` for the render. The position-restore line never ran, the item fell out of world, the kill-zone destroyed it. The IconMaker is now created inactive, configured, then activated so OnEnable fires with everything in place.
+- Shrunken `ItemVehicle.Semiscooter` had no inventory icon (the small Semiscooter did). The icon-camera bounds calculation used `item.GetComponentsInChildren<Renderer>` on the vehicle root, which missed the deparented `meshTransform` and rendered an empty 5 KB PNG. Bounds now traverses `meshTransform` separately when it isn't a descendant of the root.
+- Vehicles could be pocketed while the player was shrunken (carts and items already blocked this). `ShrunkEquipBlockPatch` was checking `CartHandler.State` and `ItemHandler.State` for `AddedEquippable` but not `VehicleHandler.State`, vehicles fell through and the block didn't fire. Added the missing case.
+- Shrunken vehicles wouldn't steer. Throttle still applied, so they accelerated straight forward with no turn input response. `ItemVehicle.UpdateSteering` gates on `DriverFullyMounted`, which only becomes true once the player's tumble body comes within a hardcoded 0.05 world units of `firstMountTransform`. On a 0.4-scale vehicle that's basically inside the seat geometry; the player couldn't reach it, `reachedFirstMount` stayed false, steering clamped to 0. Postfixed the getter to return true when the vehicle has a seated player and is scaled.
+
+## 0.5.0
+
+### Updated for R.E.P.O. v0.4
+- Rebuilt against the latest game release. 0.4.4 will not load on v0.4 (recompile is required because of internal type changes on the game side). All 22 patch points checked, 20 OK and 2 transpilers (`PhysGrabCart.CartSteer`, `EnemyVision.Vision`) verified intact.
+
+### Bug fixes
+- Map collapse messages, sirens, and the truck-arrival cascade ran way too fast in multiplayer. Every client was firing them locally; host-only now, so each fires exactly once and PUN broadcasts.
+- Final crush damage was stacking on every player in multiplayer. Every client was running the kill loop and `PlayerHealth.Hurt` routes through `HurtRPC`. Host-only now.
+
+### Improvements
+- Map collapse network sync moved from `PhotonNetwork.RaiseEvent` byte codes (198/199) to a `[PunRPC]` component piggybacked on `PunManager`, no more arbitrary 0–199 numbers that could collide with another mod.
+- Map collapse chat is more chaotic now: taxman reacts in emojis only, panic messages come from random players in the lobby, larger pool of lines, no immediate repeats.
+
 ## 0.4.4
 
 ### Bug fixes
-- Fixed non-host clients running Dispatch methods (DispatchShrink, DispatchExpand, DispatchExpandNow) — these are now gated behind a host/singleplayer check
+- Fixed non-host clients running Dispatch methods (DispatchShrink, DispatchExpand, DispatchExpandNow), these are now gated behind a host/singleplayer check
 
 ## 0.4.3
 
 ### New
-- `MapCollapse` is now public — other mods call `MapCollapse.OnMapHit()` to trigger the collapse event
-- `ScaleController.ChallengeMode` public property — implementations set this to enable challenge mode
-- Runtime `SemiIconMaker` generation for pocketed items — no more embedded PNGs, works for any item
+- `MapCollapse` is now public, other mods call `MapCollapse.OnMapHit()` to trigger the collapse event
+- `ScaleController.ChallengeMode` public property, implementations set this to enable challenge mode
+- Runtime `SemiIconMaker` generation for pocketed items, no more embedded PNGs, works for any item
 
 ### Bug fixes
 - Fixed map collapse audio ignoring master volume (now routes through the game's SFX mixer group)
@@ -18,13 +44,13 @@
 - Fixed camera glitch effect not covering the full screen while shrunken
 - Fixed shrunken players getting crushed too early during map collapse (raycast distances now scale with player size)
 - Fixed pocketed item icons disappearing after level transitions
-- Map collapse crush sequence reworked — FOV slam, heavy shake, vignette, and a brief hold before death
+- Map collapse crush sequence reworked, FOV slam, heavy shake, vignette, and a brief hold before death
 
 ### Improvements
 - ScalerCore is now a pure library with no user-facing config entries
-- `ShrinkChallengeMode` and `MapCollapse` config removed — implementations own their settings
-- `MapCollapseHitPatch` removed — implementations provide their own hit detection
-- Map collapse enemy speed toned down (1.3x base, up to 1.8x — was 2.5x to 6.5x)
+- `ShrinkChallengeMode` and `MapCollapse` config removed, implementations own their settings
+- `MapCollapseHitPatch` removed, implementations provide their own hit detection
+- Map collapse enemy speed toned down (1.3x base, up to 1.8x, was 2.5x to 6.5x)
 - Map collapse no longer unshrinks everything when it starts
 - Map collapse FOV narrows during collapse for a claustrophobic feel
 - Embedded cart/cannon/laser icon PNGs replaced with runtime SemiIconMaker
@@ -39,7 +65,7 @@
 ## 0.4.1
 
 ### New
-- Any non-pocketable item becomes pocketable while shrunken — carts, cart cannons, cart lasers, trackers. Press an inventory key to stash, shoot again to restore.
+- Any non-pocketable item becomes pocketable while shrunken, carts, cart cannons, cart lasers, trackers. Press an inventory key to stash, shoot again to restore.
 - Shrunken players can't pocket shrunken items. If you get shrunk while carrying one, it drops automatically.
 
 ### Bug fixes
@@ -58,16 +84,16 @@
 - Shrunken items show as smaller dots on the map
 - Smoother pupil transition when expressions end
 - Embedded inventory icons for cart, cart cannon, and cart laser
-- Logging cleaned up — only warnings and errors in the console
+- Logging cleaned up, only warnings and errors in the console
 - InvertedMode synced to clients via RPC for proper multiplayer challenge mode
 
 ## 0.4.0
 
 ### New
-- Added `SuppressValueDropExpand` option to ScaleOptions — valuables won't expand on damage while scaled. For cart mods where items bump into each other constantly.
-- Added `PreserveMass` option to ScaleOptions — rigidbody mass stays at its original value while scaled. For cart mods where items should weigh the same regardless of visual size.
-- Added `ScaleManager.ApplyIfNotScaled()` — scales only if not already scaled, no-op otherwise. Safe to call every frame from continuous triggers.
-- Added `ScaleManager.GetController()` — returns the ScaleController for a game object, resolving through PlayerShrinkLink.
+- Added `SuppressValueDropExpand` option to ScaleOptions, valuables won't expand on damage while scaled. For cart mods where items bump into each other constantly.
+- Added `PreserveMass` option to ScaleOptions, rigidbody mass stays at its original value while scaled. For cart mods where items should weigh the same regardless of visual size.
+- Added `ScaleManager.ApplyIfNotScaled()`, scales only if not already scaled, no-op otherwise. Safe to call every frame from continuous triggers.
+- Added `ScaleManager.GetController()`, returns the ScaleController for a game object, resolving through PlayerShrinkLink.
 
 ### Bug fixes
 - Fixed shrunken objects appearing full-size on non-host clients. The RPC was only sending the target vector without ScaleOptions fields, so clients had all-zero options and the animation never ran. Also broke late-join sync.
@@ -82,7 +108,7 @@
 - Shooting an already-shrunken target with a different factor rescales it smoothly (no flash)
 
 ### API changes
-- ScaleManager.Apply() now takes a ScaleOptions struct — per-call config replaces global ShrinkConfig
+- ScaleManager.Apply() now takes a ScaleOptions struct, per-call config replaces global ShrinkConfig
 - ScaleManager.Apply() without options uses ScaleOptions.Default
 - Added ScaleTargets flags enum for filtering what object types can be scaled
 - Added ScaleController.TargetType for mods to check what kind of object a controller manages
@@ -92,7 +118,7 @@
 ### Bug fixes
 - Fixed players in tumble/object mode (Q) not being shrinkable by guns
 - ScaleManager API now resolves PlayerShrinkLink when target GO doesn't have ScaleController directly
-- Fixed Tricycle (Bella) trike mesh not scaling — rider shrank but the bike stayed full size
+- Fixed Tricycle (Bella) trike mesh not scaling, rider shrank but the bike stayed full size
 - Single doors now cleanly break off their hinges when shrunken instead of floating in place
 - Birthday Boy's balloons now shrink along with him
 - Enemies killed or despawned while shrunken no longer respawn at shrunken size

@@ -13,7 +13,7 @@ namespace ScalerCore.Utilities
     internal class AudioPitchHelper
     {
 
-        // Per-instance state — populated at shrink, cleared at expand.
+        // Per-instance state, populated at shrink, cleared at expand.
         Sound[]?  _pitchedSounds;
         float[]?  _soundOriginalPitch;
         float[]?  _soundOriginalLoopPitch;
@@ -21,7 +21,7 @@ namespace ScalerCore.Utilities
         /// <summary>
         /// Collect every Sound instance referenced by any MonoBehaviour under root.
         /// Sound is a plain serializable class (not a Component), so GetComponentsInChildren
-        /// won't find it — we walk fields via reflection instead.
+        /// won't find it, we walk fields via reflection instead.
         /// </summary>
         static Sound[] GatherSounds(Component root)
         {

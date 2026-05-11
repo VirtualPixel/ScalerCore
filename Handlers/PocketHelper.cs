@@ -22,7 +22,7 @@ namespace ScalerCore.Handlers
             var attrs = ctrl.GetComponent<ItemAttributes>();
             if (attrs == null) return false;
 
-            // Don't make upgrades, power crystals, or health packs pocketable —
+            // Don't make upgrades, power crystals, or health packs pocketable
             // they're consumed on use, not carried as inventory items.
             var itemType = attrs.itemType;
             if (itemType == SemiFunc.itemType.item_upgrade ||
@@ -58,7 +58,7 @@ namespace ScalerCore.Handlers
 
         /// <summary>
         /// Removes the ItemEquippable that was added by InjectEquippable.
-        /// Skips removal if the item is currently in someone's inventory — it'll
+        /// Skips removal if the item is currently in someone's inventory, it'll
         /// come out at full size naturally since IsScaled is already false.
         /// </summary>
         internal static void RemoveEquippable(ScaleController ctrl)
@@ -91,25 +91,28 @@ namespace ScalerCore.Handlers
         /// </summary>
         static void CreateIconMaker(GameObject item)
         {
-            // Calculate bounds from mesh/skinned renderers only — particle systems
+            // Calculate bounds from mesh/skinned renderers only, particle systems
             // and trail renderers inflate bounds wildly.
             Bounds? maybeBounds = null;
-            foreach (var r in item.GetComponentsInChildren<Renderer>(true))
-            {
-                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer) continue;
-                if (maybeBounds == null)
-                    maybeBounds = r.bounds;
-                else
-                {
-                    var b = maybeBounds.Value;
-                    b.Encapsulate(r.bounds);
-                    maybeBounds = b;
-                }
-            }
+            AccumulateRendererBounds(item.transform, ref maybeBounds);
+
+            // ItemVehicle.meshTransform deparents from the root when ridden, and the
+            // regular Semiscooter has it deparented from spawn. GetComponentsInChildren
+            // misses it in that state, traverse it separately.
+            var vehicle = item.GetComponent<ItemVehicle>();
+            if (vehicle != null && vehicle.meshTransform != null && !vehicle.meshTransform.IsChildOf(item.transform))
+                AccumulateRendererBounds(vehicle.meshTransform, ref maybeBounds);
+
             if (maybeBounds == null) return;
             var bounds = maybeBounds.Value;
 
+            // Create inactive so SemiIconMaker.OnEnable doesn't fire before iconCamera
+            // and renderTexture are assigned, otherwise OnEnable skips creating
+            // renderTextureInstance and the game's CreateIconFromRenderTexture NREs
+            // *after* it teleports the item to (-1000,-1000,-1000), leaving the item
+            // out of world to get destroyed.
             var go = new GameObject("ScalerCore_IconMaker");
+            go.SetActive(false);
             go.transform.SetParent(item.transform, false);
 
             var localCenter = item.transform.InverseTransformPoint(bounds.center);
@@ -140,6 +143,24 @@ namespace ScalerCore.Handlers
             var maker = go.AddComponent<SemiIconMaker>();
             maker.iconCamera = cam;
             maker.renderTexture = rt;
+
+            go.SetActive(true);
+        }
+
+        static void AccumulateRendererBounds(Transform root, ref Bounds? maybeBounds)
+        {
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer) continue;
+                if (maybeBounds == null)
+                    maybeBounds = r.bounds;
+                else
+                {
+                    var b = maybeBounds.Value;
+                    b.Encapsulate(r.bounds);
+                    maybeBounds = b;
+                }
+            }
         }
     }
 }

@@ -6,7 +6,7 @@ namespace ScalerCore
     /// <summary>
     /// Public API facade for ScalerCore.
     /// All external callers (guns, patches, other mods) go through here.
-    /// Delegates to ScaleController — no new logic.
+    /// Delegates to ScaleController, no new logic.
     /// </summary>
     public static class ScaleManager
     {
@@ -26,17 +26,17 @@ namespace ScalerCore
             if (ctrl == null) return;
 
             // Check AllowedTargets against handler type
-            if (ctrl.Handler is PlayerHandler   && (options.AllowedTargets & ScaleTargets.Players)   == 0) return;
-            if (ctrl.Handler is EnemyHandler    && (options.AllowedTargets & ScaleTargets.Enemies)   == 0) return;
-            if (ctrl.Handler is ItemHandler     && (options.AllowedTargets & ScaleTargets.Items)     == 0) return;
-            if (ctrl.Handler is ValuableHandler && (options.AllowedTargets & ScaleTargets.Valuables) == 0) return;
+            if (ctrl.Handler is PlayerHandler                            && (options.AllowedTargets & ScaleTargets.Players)   == 0) return;
+            if (ctrl.Handler is EnemyHandler                             && (options.AllowedTargets & ScaleTargets.Enemies)   == 0) return;
+            if (ctrl.Handler is ItemHandler or VehicleHandler            && (options.AllowedTargets & ScaleTargets.Items)     == 0) return;
+            if (ctrl.Handler is ValuableHandler                          && (options.AllowedTargets & ScaleTargets.Valuables) == 0) return;
 
             ctrl.DispatchShrink(options);
         }
 
         /// <summary>
         /// Scale an object only if it isn't already scaled.
-        /// Unlike Apply(), this won't toggle or rescale — it's a no-op if the object is already scaled.
+        /// Unlike Apply(), this won't toggle or rescale, it's a no-op if the object is already scaled.
         /// Ideal for cart mods and other continuous triggers that fire every frame.
         /// </summary>
         public static bool ApplyIfNotScaled(GameObject target) => ApplyIfNotScaled(target, ScaleOptions.Default);
@@ -51,10 +51,10 @@ namespace ScalerCore
             if (ctrl == null || ctrl.IsScaled) return false;
 
             // Check AllowedTargets
-            if (ctrl.Handler is PlayerHandler   && (options.AllowedTargets & ScaleTargets.Players)   == 0) return false;
-            if (ctrl.Handler is EnemyHandler    && (options.AllowedTargets & ScaleTargets.Enemies)   == 0) return false;
-            if (ctrl.Handler is ItemHandler     && (options.AllowedTargets & ScaleTargets.Items)     == 0) return false;
-            if (ctrl.Handler is ValuableHandler && (options.AllowedTargets & ScaleTargets.Valuables) == 0) return false;
+            if (ctrl.Handler is PlayerHandler                            && (options.AllowedTargets & ScaleTargets.Players)   == 0) return false;
+            if (ctrl.Handler is EnemyHandler                             && (options.AllowedTargets & ScaleTargets.Enemies)   == 0) return false;
+            if (ctrl.Handler is ItemHandler or VehicleHandler            && (options.AllowedTargets & ScaleTargets.Items)     == 0) return false;
+            if (ctrl.Handler is ValuableHandler                          && (options.AllowedTargets & ScaleTargets.Valuables) == 0) return false;
 
             ctrl.DispatchShrink(options);
             return true;

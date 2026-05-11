@@ -86,7 +86,7 @@ namespace ScalerCore.Handlers
             // Walk up: if parent covers more renderers (sibling meshes), adopt it.
             // Stop at EnemyParent, if parent has sibling Animator GOs (independent rigs),
             // or if a sibling has EnemyRigidbody (scaling the parent would cascade to the
-            // physics body, causing double-scaling — HeartHugger, Shadow/Loom hit this).
+            // physics body, causing double-scaling, HeartHugger, Shadow/Loom hit this).
             while (bestVisual != null
                    && bestVisual.parent != null
                    && bestVisual.parent != ep.transform)
@@ -235,10 +235,10 @@ namespace ScalerCore.Handlers
                 state.EnemyRb.rotationSpeedIdle  = state.OriginalRotSpeedIdle;
             }
 
-            // Visual handler restore — only after the transition animation completes.
+            // Visual handler restore, only after the transition animation completes.
             // During _transitioning, OnLateUpdate still runs and manages the visual.
             // Calling OnRestore mid-transition would reset localPosition and flicker.
-            // Exception: bonk is instant — restore immediately so the mesh doesn't
+            // Exception: bonk is instant, restore immediately so the mesh doesn't
             // stay stuck at shrunken scale (especially with HandlerOwnsScale).
             if (isBonk || !ctrl._transitioning)
                 state.VisualHandler?.OnRestore(ctrl, state, state.VisualState);
@@ -275,7 +275,7 @@ namespace ScalerCore.Handlers
             if (state == null) return;
             if (ctrl.OriginalScale.x == 0f) return;
             if (!ctrl.IsScaled && !ctrl._transitioning) return;
-            // Use _animScale for ratio — it tracks intended scale even when
+            // Use _animScale for ratio, it tracks intended scale even when
             // HandlerOwnsScale is true and _t.localScale isn't being updated.
             float ratio = ctrl._animScale.x / ctrl.OriginalScale.x;
 

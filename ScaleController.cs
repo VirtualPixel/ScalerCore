@@ -11,7 +11,7 @@ namespace ScalerCore
     //
     // For enemies: scales EnemyRigidbody GO directly (shrinks grab collider, world position
     // stays fixed since physics owns it) and scales the Anim GO separately for visuals.
-    // EnemyParent is never scaled — scaling it shifts all children's world positions via
+    // EnemyParent is never scaled, scaling it shifts all children's world positions via
     // localPosition * parentScale, causing enemies like Robe to sink into the floor.
     //
     // Host calls DispatchShrink/DispatchExpand, RPCs to clients.
@@ -44,13 +44,14 @@ namespace ScalerCore
             Handler is Handlers.PlayerHandler   ? ScaleTargets.Players   :
             Handler is Handlers.EnemyHandler     ? ScaleTargets.Enemies   :
             Handler is Handlers.ItemHandler      ? ScaleTargets.Items     :
+            Handler is Handlers.VehicleHandler   ? ScaleTargets.Items     :
                                                    ScaleTargets.Valuables;
 
         // Handler resolved once in Start via ScaleHandlerRegistry.
         internal IScaleHandler? Handler;
         internal object? HandlerState;
 
-        // When true, the handler owns all scaling — controller won't touch _t.localScale.
+        // When true, the handler owns all scaling, controller won't touch _t.localScale.
         // Available for handlers that need to scale children individually.
         internal bool HandlerOwnsScale = false;
 
@@ -65,10 +66,10 @@ namespace ScalerCore
         // as being in the extraction zone when they physically aren't.
         RoomVolumeCheck? _roomVolumeCheck;
         Vector3 _originalRoomVolumeSize;
-        bool       _isItem;       // ItemAttributes present — timer restore only, no bonk expand
-        internal ItemEquippable? _itemEquippable; // cached — null for non-items
+        bool       _isItem;       // ItemAttributes present, timer restore only, no bonk expand
+        internal ItemEquippable? _itemEquippable; // cached, null for non-items
 
-        // Cross-cutting item effect scaling state — managed by ItemHandler static utilities.
+        // Cross-cutting item effect scaling state, managed by ItemHandler static utilities.
         internal List<ItemHandler.ScaledField>? _scaledItemFields;
 
         // True when this controller was shrunk with InvertedMode.
@@ -89,7 +90,7 @@ namespace ScalerCore
         // sits on EnemyParent, not EnemyRigidbody. GetComponentInParent finds it correctly.
         internal PhotonView? _networkPV;
 
-        // Sound pitch control — instance manages per-entity pitch state.
+        // Sound pitch control, instance manages per-entity pitch state.
         internal AudioPitchHelper _audioPitch = new();
 
         void Awake()
@@ -167,7 +168,7 @@ namespace ScalerCore
 
             // Challenge mode: auto-shrink players during actual runs.
             // Deferred via coroutine because voiceChat and Photon aren't ready at Start time.
-            // Only skip the menu lobby — the truck lobby counts as a run.
+            // Only skip the menu lobby, the truck lobby counts as a run.
             if (ChallengeMode && Handler is PlayerHandler
                 && !SemiFunc.RunIsLobbyMenu())
             {
@@ -207,7 +208,7 @@ namespace ScalerCore
         }
 
         // Returns true when the item is in inventory (equipping, equipped, or unequipping).
-        // While in inventory, we must NOT fight the game's scale changes — the inventory
+        // While in inventory, we must NOT fight the game's scale changes, the inventory
         // system shrinks the item to 1% and disables colliders.
         bool IsItemInInventory()
         {
@@ -224,7 +225,7 @@ namespace ScalerCore
         {
             // While in inventory, yield to the inventory system's scale management.
             // Without this, our force-apply undoes AnimateEquip's 1% shrink, leaving
-            // the item at shrunken scale with colliders disabled — a ghost that falls
+            // the item at shrunken scale with colliders disabled, a ghost that falls
             // through the floor.
             bool inInventory = IsItemInInventory();
 
@@ -251,7 +252,7 @@ namespace ScalerCore
             Handler?.OnLateUpdate(this);
 
             // Items and valuables: force-apply every frame while shrunken and not animating.
-            // Skip while in inventory — let the game manage the item's scale there.
+            // Skip while in inventory, let the game manage the item's scale there.
             // Skip when handler owns scaling (e.g. doors scale children individually).
             if (!isPlayer && !HandlerOwnsScale && IsScaled && !_transitioning && !inInventory)
             {
@@ -261,7 +262,7 @@ namespace ScalerCore
             }
         }
 
-        // Enemies despawn via SetActive(false) — the same GO is re-enabled on respawn.
+        // Enemies despawn via SetActive(false), the same GO is re-enabled on respawn.
         // Restore scale here so respawned enemies aren't still shrunken.
         public override void OnDisable()
         {
@@ -338,7 +339,7 @@ namespace ScalerCore
                     _networkPV.RPC(nameof(RPC_Shrink), RpcTarget.Others, newTarget, PackOpts(), PackBools());
                 return;
             }
-            // Guard against bare `new ScaleOptions()` (all zeroes) — fall back to defaults for critical fields.
+            // Guard against bare `new ScaleOptions()` (all zeroes), fall back to defaults for critical fields.
             if (options.Factor <= 0f) options.Factor = ScaleOptions.Default.Factor;
             if (options.Speed  <= 0f) options.Speed  = ScaleOptions.Default.Speed;
             _options = options;
@@ -360,7 +361,7 @@ namespace ScalerCore
 
             ApplyScale(target);
 
-            // Only disable ForceGrabPoint when shrinking — enlarged items don't need it.
+            // Only disable ForceGrabPoint when shrinking, enlarged items don't need it.
             if (f < 1f) SetForceGrabPoint(false);
 
             // Scale extraction detection box
@@ -407,7 +408,7 @@ namespace ScalerCore
             var ep = GetComponentInParent<EnemyParent>();
             _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, _options.Factor);
 
-            // Scale item-specific effect fields (explosion size, orb radius, etc.) — cross-cutting.
+            // Scale item-specific effect fields (explosion size, orb radius, etc.), cross-cutting.
             _scaledItemFields = ItemHandler.OnShrinkFields(this, _options.Factor);
 
             // Shrink the map icon to match.
@@ -444,7 +445,7 @@ namespace ScalerCore
             ScaleMapIcon(1f);
         }
 
-        // Instant restore — no animation. Used for bonk.
+        // Instant restore, no animation. Used for bonk.
         public void DispatchExpandNow()
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
@@ -696,7 +697,7 @@ namespace ScalerCore
         }
 
         // Called when the local player presses F10 to manually unshrink.
-        // Skips bonk immunity — manual input should always work.
+        // Skips bonk immunity, manual input should always work.
         public void RequestManualShrink()
         {
             if (IsScaled) return;
@@ -746,7 +747,7 @@ namespace ScalerCore
             else
             {
                 if (!AllowManualScale) return;
-                DispatchExpand();    // no immunity check — manual request
+                DispatchExpand();    // no immunity check, manual request
             }
         }
 

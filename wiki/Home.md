@@ -144,13 +144,13 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` an
 | `AnimSpeedMultiplier` | `1.5` | Player animation speed while scaled |
 | `FootstepPitchMultiplier` | `1.5` | Player footstep pitch while scaled |
 | `AllowedTargets` | `All` | Flags: `Players`, `Enemies`, `Items`, `Valuables`, `All` |
-| `InvertedMode` | `false` | If true, scaled state is the default — bonk temporarily grows back |
+| `InvertedMode` | `false` | If true, scaled state is the default, bonk temporarily grows back |
 | `SuppressValueDropExpand` | `false` | If true, valuables won't restore on damage while scaled (for cart mods) |
 | `PreserveMass` | `false` | If true, rigidbody mass stays at original value while scaled (for cart mods) |
 
 ## Configuration
 
-ScalerCore is a pure library with no user-facing config. Scaling behavior is controlled per-call via `ScaleOptions` — consuming mods expose whatever settings make sense for them.
+ScalerCore is a pure library with no user-facing config. Scaling behavior is controlled per-call via `ScaleOptions`, consuming mods expose whatever settings make sense for them.
 
 ## What ScalerCore Handles Automatically
 

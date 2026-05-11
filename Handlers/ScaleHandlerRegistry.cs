@@ -53,6 +53,15 @@ namespace ScalerCore.Handlers
                 go => go.GetComponent<PlayerAvatar>() != null, 0);
             Register(new ValuableHandler(),
                 go => go.GetComponent<ValuableObject>() != null, 0);
+            // Cosmetic boxes (v0.4): grabbable physics object with health, no ValuableObject
+            // or ItemAttributes . needs its own handler so the predicate matches.
+            Register(new CosmeticHandler(),
+                go => go.GetComponent<CosmeticWorldObject>() != null, 0);
+            // Vehicles (v0.4 ItemVehicle): match BEFORE ItemHandler (priority 1) because they
+            // also have ItemAttributes. ItemVehicle deparents its visible mesh when occupied
+            // . VehicleHandler keeps the mesh's world scale in sync regardless of parent state.
+            Register(new VehicleHandler(),
+                go => go.GetComponent<ItemVehicle>() != null, priority: 1);
             // Carts: has PhysGrabCart and is NOT already a pocket cart (isSmallCart).
             Register(new CartHandler(),
                 go => {

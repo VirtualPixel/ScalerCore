@@ -84,6 +84,8 @@ namespace ScalerCore
                 weAdded = cartState.AddedEquippable;
             else if (itemCtrl.HandlerState is Handlers.ItemHandler.State itemState)
                 weAdded = itemState.AddedEquippable;
+            else if (itemCtrl.HandlerState is Handlers.VehicleHandler.State vehicleState)
+                weAdded = vehicleState.AddedEquippable;
             if (!weAdded) return true;
 
             // We injected this equippable. Block if the player is also shrunken.
