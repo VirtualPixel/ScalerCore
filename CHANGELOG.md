@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+### New
+- `ScaleManager.UpdateOptions(GameObject, ScaleOptions)` plus a `ForceUpdateOptions` variant that skips the lock check. Replaces the stored options on a live session so cart mods can retune `RestoreSpeed` / `SuppressImpactFlash` / `SuppressCameraShake` when a config slider moves mid-session, instead of reflecting into the private `_options` field. Pairs with the existing read-only `CurrentOptions` getter: read, mutate, pass back. Fields consumed once at dispatch (Factor, MassCap, BonkImmuneDuration) don't reapply retroactively, the next `Apply` picks them up.
+
 ## 0.6.0
 
 ### New

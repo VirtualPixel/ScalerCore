@@ -107,6 +107,33 @@ namespace ScalerCore
         }
 
         /// <summary>
+        /// Replace the active session's options without re-dispatching scale.
+        /// Pattern: read CurrentOptions, mutate fields, pass back. Useful when a config slider
+        /// for RestoreSpeed/SuppressImpactFlash/SuppressCameraShake moves while a session is live
+        /// and the change should apply on the upcoming restore.
+        /// Fields consumed once at dispatch (Factor, MassCap, BonkImmuneDuration) don't reapply
+        /// retroactively, they take effect on the next Apply.
+        /// Returns false on missing controller, no active session, or RejectExternalApply lock.
+        /// </summary>
+        public static bool UpdateOptions(GameObject target, ScaleOptions options)
+        {
+            var ctrl = GetController(target);
+            if (ctrl == null || !ctrl.IsScaled) return false;
+            if (IsLockedFromExternal(ctrl)) return false;
+            ctrl._options = options;
+            return true;
+        }
+
+        /// <summary><see cref="UpdateOptions"/> without the lock check.</summary>
+        public static bool ForceUpdateOptions(GameObject target, ScaleOptions options)
+        {
+            var ctrl = GetController(target);
+            if (ctrl == null || !ctrl.IsScaled) return false;
+            ctrl._options = options;
+            return true;
+        }
+
+        /// <summary>
         /// Check if an object is currently scaled.
         /// </summary>
         public static bool IsScaled(GameObject target)

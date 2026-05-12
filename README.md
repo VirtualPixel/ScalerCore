@@ -120,6 +120,8 @@ The registry resolves handlers by checking predicates in descending priority ord
 | `RestoreImmediate(GameObject target)` | Restore instantly (respects bonk immunity timer). No-op when locked via `RejectExternalApply`. |
 | `ForceApply(GameObject target, ScaleOptions options)` | Apply without the `RejectExternalApply` check. For the mod that owns the lock. |
 | `ForceRestore(GameObject target)` | Restore without the `RejectExternalApply` check. For the mod that owns the lock. |
+| `UpdateOptions(GameObject target, ScaleOptions options)` | Replace the stored options on a live session without re-dispatching scale. Read `CurrentOptions`, mutate, pass back. Useful when restore-direction fields (RestoreSpeed, SuppressImpactFlash, SuppressCameraShake) need to track a config change mid-session. Returns false on missing controller, no active session, or `RejectExternalApply` lock. |
+| `ForceUpdateOptions(GameObject target, ScaleOptions options)` | `UpdateOptions` without the lock check. For the mod that owns the lock. |
 | `IsScaled(GameObject target)` | Returns true if the object is currently scaled. |
 | `CleanupAll()` | Restore all scaled objects. Called automatically on level change. |
 
