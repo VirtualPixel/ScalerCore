@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
@@ -5,11 +6,9 @@ using UnityEngine;
 namespace ScalerCore.Handlers.EnemyVisuals
 {
     /// <summary>
-    /// Visual handler for Loom (Shadow enemy).
-    /// Scales the mesh and adjusts attack distances so the Loom behaves
-    /// proportionally when shrunken. Arm visuals remain a known limitation
-    /// the game's IK solver (BotSystemSpringPoseAnimator) sets bone world
-    /// positions from cached chain lengths that conflict with parent scaling.
+    /// Visual handler for Loom (Shadow enemy). Scales the mesh, the IK
+    /// chain bind lengths used by BotSystemSpringPoseAnimator, and the
+    /// hand-reach distances so the arms track the shrunken body.
     /// Uses reflection for EnemyShadow fields, direct publicizer access
     /// causes NREs in the game's hand logic after shrink/unshrink cycles.
     /// </summary>
@@ -21,16 +20,22 @@ namespace ScalerCore.Handlers.EnemyVisuals
         static readonly FieldInfo? _origLeftPosField  = AccessTools.Field(typeof(EnemyShadow), "originalLeftWristPosition");
         static readonly FieldInfo? _handMoveDistField = AccessTools.Field(typeof(EnemyShadow), "handMoveDistance");
         static readonly FieldInfo? _slapDistField     = AccessTools.Field(typeof(EnemyShadow), "slapDistance");
+        static readonly FieldInfo? _limbChainsField   = AccessTools.Field(typeof(BotSystemSpringPoseAnimator), "limbChains");
 
         internal sealed class LoomState
         {
             internal EnemyShadow? Shadow;
+            internal BotSystemSpringPoseAnimator? Spring;
             internal Transform? RightWrist;
             internal Transform? LeftWrist;
             internal Vector3 OrigRightWristPos;
             internal Vector3 OrigLeftWristPos;
             internal float OrigHandMoveDist;
             internal float OrigSlapDist;
+            // Per-chain copy of the bind-pose bone lengths captured at Setup time.
+            // The IK solver reads lenBind directly when laying out joints, scaling
+            // it down with the body brings the arms into the body's envelope.
+            internal Dictionary<BotSystemSpringPoseAnimator.LimbChain, float[]>? OrigLenBind;
         }
 
         public object? Setup(ScaleController ctrl, EnemyHandler.State state, EnemyParent ep)
@@ -57,8 +62,12 @@ namespace ScalerCore.Handlers.EnemyVisuals
             if (_slapDistField != null)
                 loomState.OrigSlapDist = (float)_slapDistField.GetValue(shadow);
 
+            loomState.Spring = shadow.springPoseAnimator;
+            CaptureBindLengths(loomState);
+
             Plugin.Log.LogDebug($"[SC]   Loom: wrists R={loomState.RightWrist != null} L={loomState.LeftWrist != null}" +
-                $"  handMoveDist={loomState.OrigHandMoveDist:F1}  slapDist={loomState.OrigSlapDist:F1}");
+                $"  handMoveDist={loomState.OrigHandMoveDist:F1}  slapDist={loomState.OrigSlapDist:F1}" +
+                $"  chains={loomState.OrigLenBind?.Count ?? 0}");
 
             return loomState;
         }
@@ -70,7 +79,6 @@ namespace ScalerCore.Handlers.EnemyVisuals
 
             state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
 
-            // Scale attack distances so the Loom only reaches from proportional range
             if (loom.Shadow != null)
             {
                 if (_handMoveDistField != null)
@@ -78,6 +86,8 @@ namespace ScalerCore.Handlers.EnemyVisuals
                 if (_slapDistField != null)
                     _slapDistField.SetValue(loom.Shadow, loom.OrigSlapDist * ratio);
             }
+
+            ApplyBindLengths(loom, ratio);
         }
 
         public void OnRestore(ScaleController ctrl, EnemyHandler.State state, object? visualState)
@@ -96,6 +106,35 @@ namespace ScalerCore.Handlers.EnemyVisuals
                     _handMoveDistField.SetValue(loom.Shadow, loom.OrigHandMoveDist);
                 if (_slapDistField != null)
                     _slapDistField.SetValue(loom.Shadow, loom.OrigSlapDist);
+            }
+
+            ApplyBindLengths(loom, 1f);
+        }
+
+        static void CaptureBindLengths(LoomState loom)
+        {
+            if (loom.Spring == null || _limbChainsField == null) return;
+            var chains = _limbChainsField.GetValue(loom.Spring) as System.Collections.IDictionary;
+            if (chains == null) return;
+
+            loom.OrigLenBind = new Dictionary<BotSystemSpringPoseAnimator.LimbChain, float[]>();
+            foreach (System.Collections.DictionaryEntry entry in chains)
+            {
+                if (entry.Value is BotSystemSpringPoseAnimator.LimbChain chain && chain.lenBind != null)
+                    loom.OrigLenBind[chain] = (float[])chain.lenBind.Clone();
+            }
+        }
+
+        static void ApplyBindLengths(LoomState loom, float ratio)
+        {
+            if (loom.OrigLenBind == null) return;
+            foreach (var kv in loom.OrigLenBind)
+            {
+                var chain = kv.Key;
+                var orig  = kv.Value;
+                if (chain.lenBind == null || chain.lenBind.Length != orig.Length) continue;
+                for (int i = 0; i < orig.Length; i++)
+                    chain.lenBind[i] = orig[i] * ratio;
             }
         }
     }

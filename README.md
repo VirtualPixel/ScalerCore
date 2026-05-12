@@ -242,7 +242,6 @@ For all types:
 
 ## Known Issues
 
-- Loom (Shadow) arms don't scale proportionally when shrunken (IK solver conflict, cosmetic only, attack distance still scales)
 - Some untested enemy types may float or clip into the ground while shrunken
 
 ## Dependencies
