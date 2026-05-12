@@ -34,6 +34,25 @@ namespace ScalerCore
         }
     }
 
+    // Auto-cancel the shrink on death so the revive comes back at normal size.
+    // Without this, a shrunken player who dies (e.g. fell into a kill plane during
+    // bonk immunity, so bonk-expand was blocked) gets revived with IsScaled still
+    // true on remote clients. Local visual ends up at scale 1 because the game's
+    // revive animation drives the visual mesh; remotes never get the memo and
+    // keep rendering the player shrunken. Host-only: it broadcasts RPC_Expand.
+    // Skips inverted/challenge mode so dying small in that mode stays small.
+    [HarmonyPatch(typeof(PlayerAvatar), nameof(PlayerAvatar.PlayerDeathRPC))]
+    internal static class PlayerDeathExpandPatch
+    {
+        static void Postfix(PlayerAvatar __instance)
+        {
+            if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            var ctrl = __instance.GetComponent<ScaleController>();
+            if (ctrl == null || !ctrl.IsScaled || ctrl._invertedActive) return;
+            ctrl.DispatchExpand();
+        }
+    }
+
     [HarmonyPatch(typeof(PlayerHealth), nameof(PlayerHealth.Hurt))]
     internal static class PlayerBonkPatch
     {

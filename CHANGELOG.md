@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.3
+
+- Shrunken players who died and got revived stayed shrunken on everyone else's screen but looked normal on their own. The bonk-expand path normally cancels the shrink on damage, but the bonk-immunity timer blocks the expand for the duration of the shrink animation, so anything that kills you in that window (most often the kill plane after falling out of map while shrunken) puts you into the death sequence still shrunken, and revive doesn't resync the scale state. Host now auto-cancels the shrink on `PlayerAvatar.PlayerDeathRPC`. Inverted/challenge mode skipped so dying small in that mode stays small.
+
+## 0.5.2
+
+- `PlayerHandler.GetBaseGrabStats` was guarding only one of three StatsManager upgrade dictionaries with `ContainsKey` before indexing all three. v0.4 (or some combination of mods + game state) leaves players with a strength entry but no range/throw entry, so the indexer threw `KeyNotFoundException`. The throw aborted `OnRestore` before `RPC_PlayerPitchCancel` could fire, killed `ApplyLocalPlayerShrinkEffects` partway through (camera/FOV/collision/grab range never scaled, so shrunken players looked tiny but played full-size), and inside `CleanupAll`'s foreach it killed the whole loop after the first bad controller — leaving every player past that one stuck in shrunken state across level transitions. Switched to `TryGetValue`, missing entries default to 0 which matches the "no upgrades purchased" baseline.
+- Non-host clients didn't reset shrink state on level transitions. `RunManager.ChangeLevel` early-returns on non-host during gameplay, so the existing `LevelChangePatch` postfix never reached `CleanupAll` for them. Their `OnUpdate` kept re-asserting voice pitch every frame, overriding the cancel the host RPC'd in. Added a `RunManagerPUN.UpdateLevelRPC` postfix gated to non-host — that RPC fires on every client via `AllBuffered`, so the cleanup runs everywhere.
+
 ## 0.5.1
 
 ### New v0.4 content support
