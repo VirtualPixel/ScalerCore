@@ -125,7 +125,9 @@ namespace ScalerCore.Patches
             if (ctrl == null || !ctrl.IsScaled) return;
             // Only bonk-restore shrunken enemies. Enlarged enemies stay big when hurt.
             if (ctrl._options.Factor >= 1f) return;
-            ScaleManager.RestoreImmediate(ctrl.gameObject);
+            // Direct dispatch (not via ScaleManager) so RejectExternalApply doesn't gate
+            // internal bonk handling. Matches ValuableHandler/CosmeticHandler.
+            ctrl.DispatchExpandNow();
         }
     }
 

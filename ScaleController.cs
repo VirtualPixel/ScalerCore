@@ -37,6 +37,9 @@ namespace ScalerCore
         public Vector3 OriginalScale { get; internal set; }
         public bool    IsScaled        { get; private set; }
 
+        /// <summary>Snapshot of the active session's options. Read-only.</summary>
+        public ScaleOptions CurrentOptions => _options;
+
         /// <summary>
         /// What kind of object this controller is on (player, enemy, item, valuable).
         /// </summary>
@@ -79,6 +82,9 @@ namespace ScalerCore
         internal Vector3    _target;
         internal Vector3    _animScale;  // tracks intended scale independently of _t.localScale
         internal bool       _transitioning;
+        // Animation speed for the current transition. Set on each dispatch; lets shrink and
+        // expand use different speeds via RestoreSpeed.
+        internal float      _currentAnimSpeed = ScaleOptions.Default.Speed;
         Coroutine? _playerBounceAnim;
         float      _shrinkTimer;
         internal ScaleOptions _options;
@@ -236,7 +242,7 @@ namespace ScalerCore
             bool isPlayer = Handler is PlayerHandler;
             if (_transitioning && !isPlayer && !inInventory)
             {
-                float speed = _options.Speed * OriginalScale.magnitude;
+                float speed = _currentAnimSpeed * OriginalScale.magnitude;
                 _animScale = Vector3.MoveTowards(_animScale, _target, speed * Time.deltaTime);
                 if (!HandlerOwnsScale)
                     _t.localScale = _animScale;
@@ -330,6 +336,7 @@ namespace ScalerCore
                 float rf = _options.Factor;
                 var newTarget = OriginalScale * rf;
                 _bonkImmuneTimer = _options.BonkImmuneDuration;
+                _currentAnimSpeed = _options.Speed;
                 ApplyScale(newTarget);
                 if (_roomVolumeCheck != null)
                     _roomVolumeCheck.currentSize = _originalRoomVolumeSize * rf;
@@ -347,6 +354,7 @@ namespace ScalerCore
             IsScaled = true;
             _shrinkTimer = _options.Duration;
             if (_shrinkTimer < 0f) _shrinkTimer = 0f;
+            _currentAnimSpeed = _options.Speed;
 
             Scaled.Add(this);
 
@@ -377,7 +385,7 @@ namespace ScalerCore
             {
                 Plugin.Log.LogDebug($"[SC] RPC_Shrink SKIP  {_displayName}  networkPV={(_networkPV == null ? "null" : "set")}  inRoom={PhotonNetwork.InRoom}");
             }
-            AssetManager.instance?.PhysImpactEffect(_t.position);
+            PlayImpactEffect();
 
             Plugin.Log.LogDebug($"[SC] SHRINK {_displayName}" +
                 $"  factor={_options.Factor}" +
@@ -404,9 +412,12 @@ namespace ScalerCore
             if (f < 1f && _physGrabObject != null && Handler is Handlers.ValuableHandler)
                 _physGrabObject.OverrideIndestructible(0.5f);
 
-            // Pitch all Sound objects for this entity.
-            var ep = GetComponentInParent<EnemyParent>();
-            _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, _options.Factor);
+            // Pitch all Sound objects for this entity (unless suppressed for this session).
+            if (!_options.SuppressVoicePitch)
+            {
+                var ep = GetComponentInParent<EnemyParent>();
+                _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, _options.Factor);
+            }
 
             // Scale item-specific effect fields (explosion size, orb radius, etc.), cross-cutting.
             _scaledItemFields = ItemHandler.OnShrinkFields(this, _options.Factor);
@@ -427,29 +438,32 @@ namespace ScalerCore
                 $"  currentSize={sizeNow * 100f:F0}%" +
                 $"  mass {(_rb != null ? _rb.mass.ToString("F3") : "N/A")} → {_originalMass:F3}");
 
+            _currentAnimSpeed = ResolveExpandSpeed();
             ApplyScale(OriginalScale);
             SetForceGrabPoint(true);
             if (_networkPV != null && PhotonNetwork.InRoom)
                 _networkPV.RPC(nameof(RPC_Expand), RpcTarget.Others);
-            AssetManager.instance?.PhysImpactEffect(_t.position);
-            SemiFunc.CameraShakeImpactDistance(_t.position, 2f, 0.1f, 1f, 8f);
+            PlayImpactEffect();
+            PlayCameraShake();
 
             if (_rb != null) _rb.mass = _originalMass;
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
 
             Handler?.OnRestore(this, isBonk: false);
 
-            _audioPitch.RestorePitch();
+            if (!_options.SuppressVoicePitch) _audioPitch.RestorePitch();
             ItemHandler.OnRestoreFields(_scaledItemFields);
             _scaledItemFields = null;
             ScaleMapIcon(1f);
         }
 
-        // Instant restore, no animation. Used for bonk.
+        // Instant restore, no animation. Used for bonk (player/valuable/enemy/cosmetic damage).
+        // Skipped when the session set IgnoreBonkExpand.
         public void DispatchExpandNow()
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             if (!IsScaled) return;
+            if (_options.IgnoreBonkExpand) return;
             if (_bonkImmuneTimer > 0f)
             {
                 Plugin.Log.LogDebug($"[SC] BONK BLOCKED {_displayName}  immune={_bonkImmuneTimer:F2}s remaining");
@@ -464,20 +478,21 @@ namespace ScalerCore
                 $"  currentSize={sizeNow * 100f:F0}%" +
                 $"  mass {(_rb != null ? _rb.mass.ToString("F3") : "N/A")} → {_originalMass:F3}");
 
+            _currentAnimSpeed = ResolveExpandSpeed();
             ApplyScale(OriginalScale);
             SetForceGrabPoint(true);
 
             if (_networkPV != null && PhotonNetwork.InRoom)
                 _networkPV.RPC(nameof(RPC_Expand), RpcTarget.Others);
-            AssetManager.instance?.PhysImpactEffect(_t.position);
-            SemiFunc.CameraShakeImpactDistance(_t.position, 2f, 0.1f, 1f, 8f);
+            PlayImpactEffect();
+            PlayCameraShake();
 
             if (_rb != null) _rb.mass = _originalMass;
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
 
             Handler?.OnRestore(this, isBonk: true);
 
-            _audioPitch.RestorePitch();
+            if (!_options.SuppressVoicePitch) _audioPitch.RestorePitch();
             ItemHandler.OnRestoreFields(_scaledItemFields);
             _scaledItemFields = null;
             ScaleMapIcon(1f);
@@ -495,6 +510,21 @@ namespace ScalerCore
                 _playerBounceAnim = StartCoroutine(PlayerBounceAnim(_t.localScale, target));
             }
         }
+
+        void PlayImpactEffect()
+        {
+            if (_options.SuppressImpactFlash) return;
+            AssetManager.instance?.PhysImpactEffect(_t.position);
+        }
+
+        void PlayCameraShake()
+        {
+            if (_options.SuppressCameraShake) return;
+            SemiFunc.CameraShakeImpactDistance(_t.position, 2f, 0.1f, 1f, 8f);
+        }
+
+        float ResolveExpandSpeed() =>
+            _options.RestoreSpeed > 0f ? _options.RestoreSpeed : _options.Speed;
 
         // Scale the map icon dot to match the shrunken size.
         // factor=1 restores to original, factor<1 shrinks the dot.
@@ -585,10 +615,15 @@ namespace ScalerCore
         float[] PackOpts() => new[] {
             _options.Factor, _options.Speed, _options.MassCap,
             _options.SpeedFactor, _options.AnimSpeedMultiplier,
-            _options.FootstepPitchMultiplier, _options.BonkImmuneDuration
+            _options.FootstepPitchMultiplier, _options.BonkImmuneDuration,
+            _options.RestoreSpeed
         };
 
-        bool[] PackBools() => new[] { _options.PreserveMass, _options.InvertedMode };
+        bool[] PackBools() => new[] {
+            _options.PreserveMass, _options.InvertedMode, _options.SuppressImpactFlash,
+            _options.SuppressVoicePitch, _options.IgnoreBonkExpand, _options.RejectExternalApply,
+            _options.SuppressCameraShake
+        };
 
         [PunRPC]
         void RPC_Shrink(Vector3 target, float[] opts, bool[] flags)
@@ -601,19 +636,30 @@ namespace ScalerCore
             _options.AnimSpeedMultiplier   = opts[4];
             _options.FootstepPitchMultiplier = opts[5];
             _options.BonkImmuneDuration    = opts[6];
+            // Slots 7+ added later. Length-guarded so old hosts can drive new clients.
+            _options.RestoreSpeed          = opts.Length > 7 ? opts[7] : 0f;
             _options.PreserveMass          = flags[0];
             _options.InvertedMode          = flags[1];
+            _options.SuppressImpactFlash   = flags.Length > 2 && flags[2];
+            _options.SuppressVoicePitch    = flags.Length > 3 && flags[3];
+            _options.IgnoreBonkExpand      = flags.Length > 4 && flags[4];
+            _options.RejectExternalApply   = flags.Length > 5 && flags[5];
+            _options.SuppressCameraShake   = flags.Length > 6 && flags[6];
             _invertedActive = flags[1];
             float f = _options.Factor;
             IsScaled = true;
+            _currentAnimSpeed = _options.Speed;
             Scaled.Add(this);
             if (_rb != null && !_isItem && !_options.PreserveMass) _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, _options.MassCap);
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize * f;
             ApplyScale(target);
             if (f < 1f) SetForceGrabPoint(false);
-            AssetManager.instance?.PhysImpactEffect(_t.position);
-            var ep = GetComponentInParent<EnemyParent>();
-            _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, f);
+            PlayImpactEffect();
+            if (!_options.SuppressVoicePitch)
+            {
+                var ep = GetComponentInParent<EnemyParent>();
+                _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, f);
+            }
             _scaledItemFields = ItemHandler.OnShrinkFields(this, f);
 
             // Handler-specific client-side shrink (player voice/camera, etc.)
@@ -632,11 +678,12 @@ namespace ScalerCore
             Scaled.Remove(this);
             if (_rb != null) _rb.mass = _originalMass;
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+            _currentAnimSpeed = ResolveExpandSpeed();
             ApplyScale(OriginalScale);
             SetForceGrabPoint(true);
-            AssetManager.instance?.PhysImpactEffect(_t.position);
-            SemiFunc.CameraShakeImpactDistance(_t.position, 2f, 0.1f, 1f, 8f);
-            _audioPitch.RestorePitch();
+            PlayImpactEffect();
+            PlayCameraShake();
+            if (!_options.SuppressVoicePitch) _audioPitch.RestorePitch();
             ItemHandler.OnRestoreFields(_scaledItemFields);
             _scaledItemFields = null;
 

@@ -29,6 +29,9 @@ namespace ScalerCore
         /// <summary>Scale animation speed (scaled by original size magnitude).</summary>
         public float Speed;
 
+        /// <summary>Animation speed for the expand direction. 0 falls back to <see cref="Speed"/>.</summary>
+        public float RestoreSpeed;
+
         /// <summary>Minimum seconds of bonk immunity after scaling.</summary>
         public float BonkImmuneDuration;
 
@@ -65,6 +68,25 @@ namespace ScalerCore
         /// </summary>
         public bool PreserveMass;
 
+        /// <summary>If true, skips the impact flash on shrink/expand.</summary>
+        public bool SuppressImpactFlash;
+
+        /// <summary>If true, skips the camera shake on expand. Pair with <see cref="SuppressImpactFlash"/>.</summary>
+        public bool SuppressCameraShake;
+
+        /// <summary>If true, no audio pitch shift on the controller's sounds or the player's voice chat.</summary>
+        public bool SuppressVoicePitch;
+
+        /// <summary>If true, damage does not restore the controller. Covers every bonk path.</summary>
+        public bool IgnoreBonkExpand;
+
+        /// <summary>
+        /// If true, external <see cref="ScaleManager.Apply"/> / <see cref="ScaleManager.Restore"/> /
+        /// <see cref="ScaleManager.RestoreImmediate"/> no-op on this controller. The owning mod uses
+        /// <see cref="ScaleManager.ForceApply"/> / <see cref="ScaleManager.ForceRestore"/> to bypass.
+        /// </summary>
+        public bool RejectExternalApply;
+
         /// <summary>
         /// Sensible defaults for a shrink ray. Override fields as needed.
         /// For growth mods, set Factor > 1 and increase MassCap.
@@ -74,6 +96,7 @@ namespace ScalerCore
             Factor                    = 0.4f,
             Duration                  = 0f,
             Speed                     = 2.0f,
+            RestoreSpeed              = 0f,
             BonkImmuneDuration        = 5.0f,
             MassCap                   = 50f,
             SpeedFactor               = 0.75f,
@@ -83,6 +106,11 @@ namespace ScalerCore
             InvertedMode              = false,
             SuppressValueDropExpand   = false,
             PreserveMass              = false,
+            SuppressImpactFlash       = false,
+            SuppressCameraShake       = false,
+            SuppressVoicePitch        = false,
+            IgnoreBonkExpand          = false,
+            RejectExternalApply       = false,
         };
     }
 }

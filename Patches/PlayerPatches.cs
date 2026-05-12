@@ -178,6 +178,33 @@ namespace ScalerCore
         }
     }
 
+    // forceGrabPoint items get positioned with a hardcoded -up*0.3 world-unit offset
+    // in StartGrabbingPhysObject. Doesn't scale with the player, so shrunken players
+    // hold guns at waist height. Lift back proportionally so the residual offset is
+    // 0.3*factor instead of a flat 0.3.
+
+    [HarmonyPatch(typeof(PhysGrabber), "StartGrabbingPhysObject")]
+    internal static class ForceGrabPointVerticalScalePatch
+    {
+        static void Postfix(PhysGrabber __instance, PhysGrabObject ___grabbedPhysGrabObject)
+        {
+            var pa = __instance.playerAvatar;
+            if (pa == null) return;
+            var ctrl = pa.GetComponent<ScaleController>();
+            if (ctrl == null || !ctrl.IsScaled) return;
+            if (___grabbedPhysGrabObject == null) return;
+            var fgp = ___grabbedPhysGrabObject.forceGrabPoint;
+            if (fgp == null || !fgp.gameObject.activeSelf) return;
+            var overrideTransform = pa.localCamera?.GetOverrideTransform();
+            if (overrideTransform == null) return;
+
+            float lift = 0.3f * (1f - ctrl._options.Factor);
+            Vector3 delta = overrideTransform.up * lift;
+            __instance.physGrabPointPuller.position += delta;
+            __instance.physGrabPointPlane.position  += delta;
+        }
+    }
+
     // --- cart pull distance: scale when player is shrunken ---
 
     [HarmonyPatch(typeof(PhysGrabCart), "CartSteer")]

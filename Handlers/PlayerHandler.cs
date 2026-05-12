@@ -80,6 +80,11 @@ namespace ScalerCore.Handlers
             internal PlayerAvatar? MenuPlayerAvatar;
             internal PlayerExpression? MenuExpression;
             internal PlayerEyes? MenuEyes;
+
+            // Set by ApplyLocalPlayerShrinkEffects, cleared by RestoreLocalPlayerShrinkEffects.
+            // Guards against a second Apply (e.g. RPC_Shrink during rescale) re-capturing
+            // already-scaled singleton values as originals and compounding to factor².
+            internal bool LocalEffectsApplied;
         }
 
         /// <summary>
@@ -142,17 +147,20 @@ namespace ScalerCore.Handlers
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
 
-            // Voice pitch: apply on all clients.
-            if (state.PlayerAvatar.voiceChat != null)
+            // Voice pitch: apply on all clients, unless the active session opted out.
+            if (!ctrl._options.SuppressVoicePitch)
             {
-                float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
-                float pitchMult = 1f + (1f - factor) * 0.5f;
-                state.PlayerAvatar.voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 9999f);
-                Plugin.Log.LogDebug($"[SC] VOICE PITCH SET  {ctrl._displayName}  pitch={pitchMult:F2}  isLocal={state.PlayerAvatar.isLocal}  isMine={ctrl._networkPV?.IsMine}");
-            }
-            else
-            {
-                Plugin.Log.LogDebug($"[SC] VOICE PITCH SKIP  {ctrl._displayName}  voiceChat=null  isLocal={state.PlayerAvatar.isLocal}  voiceChatFetched={state.PlayerAvatar.voiceChatFetched}");
+                if (state.PlayerAvatar.voiceChat != null)
+                {
+                    float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
+                    float pitchMult = 1f + (1f - factor) * 0.5f;
+                    state.PlayerAvatar.voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 9999f);
+                    Plugin.Log.LogDebug($"[SC] VOICE PITCH SET  {ctrl._displayName}  pitch={pitchMult:F2}  isLocal={state.PlayerAvatar.isLocal}  isMine={ctrl._networkPV?.IsMine}");
+                }
+                else
+                {
+                    Plugin.Log.LogDebug($"[SC] VOICE PITCH SKIP  {ctrl._displayName}  voiceChat=null  isLocal={state.PlayerAvatar.isLocal}  voiceChatFetched={state.PlayerAvatar.voiceChatFetched}");
+                }
             }
 
             // Local-player-only: adjust camera, grab, and movement. In singleplayer
@@ -179,7 +187,8 @@ namespace ScalerCore.Handlers
                 var physGrabber = ctrl.GetComponent<PhysGrabber>();
                 var (baseStr, baseRange, baseThrow) = GetBaseGrabStats(ctrl);
 
-                ctrl._networkPV.RPC("RPC_PlayerPitchCancel", RpcTarget.All);
+                if (!ctrl._options.SuppressVoicePitch)
+                    ctrl._networkPV.RPC("RPC_PlayerPitchCancel", RpcTarget.All);
                 if (physGrabber != null && isHost)
                 {
                     physGrabber.grabStrength = baseStr;
@@ -187,7 +196,7 @@ namespace ScalerCore.Handlers
                     physGrabber.throwStrength = baseThrow;
                 }
             }
-            else
+            else if (!ctrl._options.SuppressVoicePitch)
                 state.PlayerAvatar.voiceChat?.OverridePitchCancel();
             bool isLocalPlayer = !PhotonNetwork.InRoom || (ctrl._networkPV != null && ctrl._networkPV.IsMine);
             if (isLocalPlayer)
@@ -215,7 +224,7 @@ namespace ScalerCore.Handlers
                 bool isLocalPlayer = !PhotonNetwork.InRoom || (ctrl._networkPV != null && ctrl._networkPV.IsMine);
                 // Re-assert voice pitch every frame on ALL clients so other systems
                 // (e.g. hourglass, spewer face-detach) can't permanently replace it.
-                if (state.PlayerAvatar.voiceChat != null)
+                if (!ctrl._options.SuppressVoicePitch && state.PlayerAvatar.voiceChat != null)
                 {
                     float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
                     float pitchMult = 1f + (1f - factor) * 0.5f;
@@ -404,6 +413,7 @@ namespace ScalerCore.Handlers
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
+            if (state.LocalEffectsApplied) return;
 
             float f = ctrl._options.Factor;
             if (CameraPosition.instance != null)
@@ -496,6 +506,8 @@ namespace ScalerCore.Handlers
             // by contact direction, so shrunken players can wall-jump. Fixing this
             // properly requires a normal check or raycast, not just radius scaling.
             PlayerShrinkScreenEffects(ctrl, shrinking: true);
+
+            state.LocalEffectsApplied = true;
         }
 
         /// <summary>
@@ -505,6 +517,7 @@ namespace ScalerCore.Handlers
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
+            if (!state.LocalEffectsApplied) return;
 
             if (CameraPosition.instance != null)
                 CameraPosition.instance.playerOffset = state.OriginalCamOffset;
@@ -552,6 +565,8 @@ namespace ScalerCore.Handlers
                 PlayerCollisionStand.instance.Offset = state.OriginalStandCheckOffset;
             // Ground check sphere not modified (see ApplyLocalPlayerShrinkEffects).
             PlayerShrinkScreenEffects(ctrl, shrinking: false);
+
+            state.LocalEffectsApplied = false;
         }
 
         /// <summary>

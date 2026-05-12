@@ -2,7 +2,25 @@
 
 ## 0.5.3
 
+### New
+- Added `ScaleOptions.RestoreSpeed`, animation speed for the expand direction. 0 falls back to `Speed`.
+- Added `ScaleOptions.SuppressImpactFlash`, skips the impact flash on shrink/expand.
+- Added `ScaleOptions.SuppressCameraShake`, skips the camera shake on expand. Pair with `SuppressImpactFlash` for a silent restore.
+- Added `ScaleOptions.SuppressVoicePitch`, skips the audio pitch shift and per-frame voice chat overrides.
+- Added `ScaleOptions.IgnoreBonkExpand`, damage doesn't restore the controller. Gated inside `DispatchExpandNow` so every bonk path honors it (player, valuable, enemy, cosmetic).
+- Added `ScaleOptions.RejectExternalApply` plus `ScaleManager.ForceApply` / `ScaleManager.ForceRestore`. Opt-in lock so other mods' `Apply`/`Restore`/`RestoreImmediate` no-op on your controller; the `Force*` variants bypass.
+- Added `ScaleController.CurrentOptions`, read-only snapshot of the active session's options.
+
+### Bug fixes
+- Fixed shrunken players holding guns (or any forceGrabPoint item) at waist height instead of eye height. The game bakes a fixed `-up*0.3` offset in `StartGrabbingPhysObject` that doesn't scale, the new postfix lifts the puller back proportionally to player size.
+- Fixed shrunken players ending up mis-sized after a rescale. `Apply` with a different factor on an already-scaled controller re-fired `Handler.OnScale` on non-host clients, which read already-scaled singleton values as the new originals and compounded to factor². `ApplyLocalPlayerShrinkEffects` and `RestoreLocalPlayerShrinkEffects` are now guarded by a `LocalEffectsApplied` flag.
 - Shrunken players who died and got revived stayed shrunken on everyone else's screen but looked normal on their own. The bonk-expand path normally cancels the shrink on damage, but the bonk-immunity timer blocks the expand for the duration of the shrink animation, so anything that kills you in that window (most often the kill plane after falling out of map while shrunken) puts you into the death sequence still shrunken, and revive doesn't resync the scale state. Host now auto-cancels the shrink on `PlayerAvatar.PlayerDeathRPC`. Inverted/challenge mode skipped so dying small in that mode stays small.
+
+### Internal
+- RPC payload extended for the new options (`PackOpts` slot 7, `PackBools` slots 2-6). Decoder length-guards every slot, old hosts can still drive new clients.
+- `EnemyBonkPatch` now calls `ctrl.DispatchExpandNow()` directly instead of going through `ScaleManager.RestoreImmediate`. Internal bonk paths bypass the `RejectExternalApply` lock, only external mod calls honor it. Matches what `ValuableHandler` and `CosmeticHandler` already did.
+- `ScaleManager` deduplication, the handler-type filter and lock check moved into `IsTargetAllowed` / `IsLockedFromExternal` helpers used by `Apply`/`ApplyIfNotScaled`/`Restore`/`RestoreImmediate`.
+- `ScaleController` deduplication, `PlayImpactEffect()`, `PlayCameraShake()`, and `ResolveExpandSpeed()` helpers replace the repeated gate + ternary that had been inlined at every dispatch site.
 
 ## 0.5.2
 

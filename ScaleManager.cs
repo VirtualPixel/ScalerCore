@@ -13,7 +13,8 @@ namespace ScalerCore
         /// <summary>
         /// Scale an object using the provided options.
         /// Gets existing ScaleController or returns if none attached.
-        /// Skips the target if its handler type is not included in <see cref="ScaleOptions.AllowedTargets"/>.
+        /// Skips the target if its handler type is not included in <see cref="ScaleOptions.AllowedTargets"/>,
+        /// or if the controller's current session was locked via <see cref="ScaleOptions.RejectExternalApply"/>.
         /// </summary>
         public static void Apply(GameObject target) => Apply(target, ScaleOptions.Default);
 
@@ -24,13 +25,8 @@ namespace ScalerCore
         {
             var ctrl = GetController(target);
             if (ctrl == null) return;
-
-            // Check AllowedTargets against handler type
-            if (ctrl.Handler is PlayerHandler                            && (options.AllowedTargets & ScaleTargets.Players)   == 0) return;
-            if (ctrl.Handler is EnemyHandler                             && (options.AllowedTargets & ScaleTargets.Enemies)   == 0) return;
-            if (ctrl.Handler is ItemHandler or VehicleHandler            && (options.AllowedTargets & ScaleTargets.Items)     == 0) return;
-            if (ctrl.Handler is ValuableHandler                          && (options.AllowedTargets & ScaleTargets.Valuables) == 0) return;
-
+            if (IsLockedFromExternal(ctrl)) return;
+            if (!IsTargetAllowed(ctrl, options.AllowedTargets)) return;
             ctrl.DispatchShrink(options);
         }
 
@@ -43,21 +39,29 @@ namespace ScalerCore
 
         /// <summary>
         /// Scale an object only if it isn't already scaled.
-        /// Returns true if the object was scaled, false if it was already scaled or has no controller.
+        /// Returns true if the object was scaled, false if it was already scaled, has no controller,
+        /// is locked by another mod, or is filtered out by AllowedTargets.
         /// </summary>
         public static bool ApplyIfNotScaled(GameObject target, ScaleOptions options)
         {
             var ctrl = GetController(target);
             if (ctrl == null || ctrl.IsScaled) return false;
-
-            // Check AllowedTargets
-            if (ctrl.Handler is PlayerHandler                            && (options.AllowedTargets & ScaleTargets.Players)   == 0) return false;
-            if (ctrl.Handler is EnemyHandler                             && (options.AllowedTargets & ScaleTargets.Enemies)   == 0) return false;
-            if (ctrl.Handler is ItemHandler or VehicleHandler            && (options.AllowedTargets & ScaleTargets.Items)     == 0) return false;
-            if (ctrl.Handler is ValuableHandler                          && (options.AllowedTargets & ScaleTargets.Valuables) == 0) return false;
-
+            if (IsLockedFromExternal(ctrl)) return false;
+            if (!IsTargetAllowed(ctrl, options.AllowedTargets)) return false;
             ctrl.DispatchShrink(options);
             return true;
+        }
+
+        /// <summary>
+        /// <see cref="Apply(GameObject, ScaleOptions)"/> without the lock check.
+        /// Still respects <see cref="ScaleOptions.AllowedTargets"/>.
+        /// </summary>
+        public static void ForceApply(GameObject target, ScaleOptions options)
+        {
+            var ctrl = GetController(target);
+            if (ctrl == null) return;
+            if (!IsTargetAllowed(ctrl, options.AllowedTargets)) return;
+            ctrl.DispatchShrink(options);
         }
 
         /// <summary>
@@ -72,22 +76,34 @@ namespace ScalerCore
 
         /// <summary>
         /// Restore with animation (timer expiry, gun toggle).
+        /// No-op if the session was locked via <see cref="ScaleOptions.RejectExternalApply"/>.
         /// </summary>
         public static void Restore(GameObject target)
         {
             var ctrl = GetController(target);
             if (ctrl == null) return;
+            if (IsLockedFromExternal(ctrl)) return;
             ctrl.DispatchExpand();
         }
 
         /// <summary>
         /// Restore immediately without animation (bonk/damage).
+        /// No-op if the session was locked via <see cref="ScaleOptions.RejectExternalApply"/>.
         /// </summary>
         public static void RestoreImmediate(GameObject target)
         {
             var ctrl = GetController(target);
             if (ctrl == null) return;
+            if (IsLockedFromExternal(ctrl)) return;
             ctrl.DispatchExpandNow();
+        }
+
+        /// <summary><see cref="Restore"/> without the lock check.</summary>
+        public static void ForceRestore(GameObject target)
+        {
+            var ctrl = GetController(target);
+            if (ctrl == null) return;
+            ctrl.DispatchExpand();
         }
 
         /// <summary>
@@ -106,5 +122,20 @@ namespace ScalerCore
         {
             ScaleController.CleanupAll();
         }
+
+        // Handlers without a dedicated flag bit (e.g. CosmeticHandler) fall through to Valuables.
+        static bool IsTargetAllowed(ScaleController ctrl, ScaleTargets allowed)
+        {
+            return ctrl.Handler switch
+            {
+                PlayerHandler                  => (allowed & ScaleTargets.Players)   != 0,
+                EnemyHandler                   => (allowed & ScaleTargets.Enemies)   != 0,
+                ItemHandler or VehicleHandler  => (allowed & ScaleTargets.Items)     != 0,
+                _                              => (allowed & ScaleTargets.Valuables) != 0,
+            };
+        }
+
+        static bool IsLockedFromExternal(ScaleController ctrl) =>
+            ctrl.IsScaled && ctrl._options.RejectExternalApply;
     }
 }
