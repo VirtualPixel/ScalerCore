@@ -2,7 +2,7 @@
 
 A scaling library for [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/) modders. Handles the hard parts of scaling game objects -- physics, audio, animation, colliders, NavMesh, multiplayer sync -- so you don't have to.
 
-> **v0.5.1: v0.4 content support and follow-up fixes.** Cosmetic boxes shrink. `ItemVehicle` shrinks, drives correctly when small, gets proper inventory icons when pocketed, and respects the shrunken-player pocketing block that already applied to carts. Carts no longer vanish on repeated shrink/unshrink.
+> **v0.6.0: Loom's arms finally track a shrunken body.** Six new `ScaleOptions` (separate restore speed, impact flash, camera shake, voice pitch, bonk-expand, external Apply lock) plus `ScaleManager.ForceApply` / `ForceRestore` for the owning mod to bypass the lock. Held forceGrabPoint items sit at eye height when shrunken instead of waist. `ScaleController.CurrentOptions` exposes the active session's option snapshot.
 
 If you're building a mod that changes the size of things (shrink rays, growth potions, whatever), ScalerCore gives you a clean API and takes care of the edge cases.
 
@@ -116,8 +116,10 @@ The registry resolves handlers by checking predicates in descending priority ord
 | `ApplyIfNotScaled(GameObject target)` | Scale only if not already scaled. No-op if already scaled. Returns true if scaling was applied. |
 | `ApplyIfNotScaled(GameObject target, ScaleOptions options)` | Same with custom options. Ideal for cart mods and continuous triggers. |
 | `GetController(GameObject target)` | Get the ScaleController for a game object (resolves through PlayerShrinkLink). Returns null if none. |
-| `Restore(GameObject target)` | Restore with smooth animation. |
-| `RestoreImmediate(GameObject target)` | Restore instantly (respects bonk immunity timer). |
+| `Restore(GameObject target)` | Restore with smooth animation. No-op when locked via `RejectExternalApply`. |
+| `RestoreImmediate(GameObject target)` | Restore instantly (respects bonk immunity timer). No-op when locked via `RejectExternalApply`. |
+| `ForceApply(GameObject target, ScaleOptions options)` | Apply without the `RejectExternalApply` check. For the mod that owns the lock. |
+| `ForceRestore(GameObject target)` | Restore without the `RejectExternalApply` check. For the mod that owns the lock. |
 | `IsScaled(GameObject target)` | Returns true if the object is currently scaled. |
 | `CleanupAll()` | Restore all scaled objects. Called automatically on level change. |
 
@@ -129,6 +131,7 @@ Attached automatically to game objects. Key public members:
 |--------|-------------|
 | `IsScaled` | Whether the object is currently scaled. |
 | `OriginalScale` | The object's scale before any modification. |
+| `CurrentOptions` | Snapshot of the active session's options. Read-only. |
 | `TargetType` | What kind of object this is (`ScaleTargets.Players`, `.Enemies`, etc.). |
 | `ScaleTarget` | Override in handler's `Setup` to scale a different transform than the controller's. |
 | `AllowManualScale` | Static bool, gates debug shrink/expand requests. Host sets it. |
@@ -165,7 +168,8 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as
 |-------|---------|-------------|
 | `Factor` | `0.4` | Scale multiplier (0.4 = 40% of original size) |
 | `Duration` | `0` | Seconds until auto-restore (0 = permanent) |
-| `Speed` | `2.0` | Scale animation speed |
+| `Speed` | `2.0` | Scale animation speed (used for both directions when `RestoreSpeed` is 0) |
+| `RestoreSpeed` | `0` | Animation speed for the expand direction. 0 falls back to `Speed`. |
 | `BonkImmuneDuration` | `5.0` | Grace period after scaling before damage can restore |
 | `MassCap` | `50.0` | Max rigidbody mass while scaled |
 | `SpeedFactor` | `0.75` | Enemy NavMesh speed multiplier |
@@ -175,6 +179,11 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as
 | `InvertedMode` | `false` | If true, scaled state is the default and bonk temporarily grows back |
 | `SuppressValueDropExpand` | `false` | If true, valuables won't expand when damaged while scaled (for cart mods) |
 | `PreserveMass` | `false` | If true, rigidbody mass stays at original value while scaled (for cart mods) |
+| `SuppressImpactFlash` | `false` | Skips the impact flash on shrink/expand (for cart-style mods that fire constantly) |
+| `SuppressCameraShake` | `false` | Skips the camera shake on expand (pair with `SuppressImpactFlash` for a silent restore) |
+| `SuppressVoicePitch` | `false` | No audio pitch shift on the controller's sounds or player's voice chat |
+| `IgnoreBonkExpand` | `false` | Damage does not restore the controller. Covers every bonk path. |
+| `RejectExternalApply` | `false` | External `Apply`/`Restore`/`RestoreImmediate` calls from other mods no-op. Owning mod uses `ForceApply`/`ForceRestore`. |
 
 ### ScaleTargets
 

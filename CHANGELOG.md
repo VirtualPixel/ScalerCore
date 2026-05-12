@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.3
+## 0.6.0
 
 ### New
 - Added `ScaleOptions.RestoreSpeed`, animation speed for the expand direction. 0 falls back to `Speed`.
