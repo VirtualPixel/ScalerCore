@@ -240,10 +240,6 @@ For all types:
 - Late-join state sync
 - Automatic cleanup on level change
 
-## Known Issues
-
-- Some untested enemy types may float or clip into the ground while shrunken
-
 ## Dependencies
 
 - [BepInEx 5](https://github.com/BepInEx/BepInEx) (5.4.2100+)
