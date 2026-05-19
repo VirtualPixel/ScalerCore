@@ -85,6 +85,11 @@ namespace ScalerCore.Handlers
             // Guards against a second Apply (e.g. RPC_Shrink during rescale) re-capturing
             // already-scaled singleton values as originals and compounding to factor².
             internal bool LocalEffectsApplied;
+
+            // True when this shrink took the RepoXR (VR) path: the vanilla camera blocks
+            // were skipped in favour of scaling the VR rig. Restore reads this so it skips
+            // exactly the same blocks regardless of the config state at restore time.
+            internal bool VRShrinkApplied;
         }
 
         /// <summary>
@@ -267,6 +272,11 @@ namespace ScalerCore.Handlers
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
 
+            // VR: reassert the rig scale. RepoXR rebuilds its rig on scene changes, so a
+            // shrink that outlives a level transition would otherwise revert to full size.
+            if (state.VRShrinkApplied && state.PlayerAvatar.isLocal)
+                Compat.RepoXRBridge.Tick();
+
             // Force-apply target scale when at rest (bounce coroutine finished).
             if (ctrl.IsScaled && !ctrl._transitioning)
                 ctrl._t.localScale = ctrl._target;
@@ -416,26 +426,33 @@ namespace ScalerCore.Handlers
             if (state.LocalEffectsApplied) return;
 
             float f = ctrl._options.Factor;
-            if (CameraPosition.instance != null)
+
+            // RepoXR (VR) drives its own head-tracked camera, so the vanilla camera and FOV
+            // nudges below never reach a VR player. Take the bridge path instead, which
+            // scales the VR rig. Captured on State so the restore skips the same blocks.
+            bool vr = Compat.RepoXRBridge.Active;
+            state.VRShrinkApplied = vr;
+
+            if (!vr && CameraPosition.instance != null)
             {
                 state.OriginalCamOffset = CameraPosition.instance.playerOffset;
                 CameraPosition.instance.playerOffset = state.OriginalCamOffset * f;
             }
-            if (CameraCrouchPosition.instance != null)
+            if (!vr && CameraCrouchPosition.instance != null)
             {
                 state.OriginalCrouchPos = CameraCrouchPosition.instance.Position;
                 CameraCrouchPosition.instance.Position = state.OriginalCrouchPos * f;
             }
             if (state.CameraCrawl == null)
                 state.CameraCrawl = Object.FindObjectOfType<CameraCrawlPosition>();
-            if (state.CameraCrawl != null)
+            if (!vr && state.CameraCrawl != null)
             {
                 state.OriginalCrawlPos = state.CameraCrawl.Position;
                 state.CameraCrawl.Position = state.OriginalCrawlPos * f;
             }
             if (state.VisionTarget == null)
                 state.VisionTarget = state.PlayerAvatar.GetComponent<PlayerVisionTarget>();
-            if (state.VisionTarget != null)
+            if (!vr && state.VisionTarget != null)
             {
                 // VisionTransform.localPosition.y = CurrentPosition, which lerps toward StandPosition
                 // (or Crouch/Crawl). PhysGrabber uses VisionTransform to position held guns via
@@ -466,7 +483,7 @@ namespace ScalerCore.Handlers
             else Plugin.Log.LogWarning("[SC] PhysGrabber.instance null, grab range not scaled");
             float speedMult = Mathf.Lerp(1f, f, 0.5f);
             PlayerController.instance?.OverrideSpeed(speedMult, 9999f);
-            if (CameraZoom.Instance != null)
+            if (!vr && CameraZoom.Instance != null)
             {
                 state.OriginalFOV = CameraZoom.Instance.playerZoomDefault;
                 float newFOV = state.OriginalFOV + 20f * (1f - f);
@@ -507,6 +524,11 @@ namespace ScalerCore.Handlers
             // properly requires a normal check or raycast, not just radius scaling.
             PlayerShrinkScreenEffects(ctrl, shrinking: true);
 
+            // VR: scale the RepoXR tracking space and hand rig in place of the camera
+            // blocks skipped above.
+            if (vr)
+                Compat.RepoXRBridge.ApplyViewpointShrink(f);
+
             state.LocalEffectsApplied = true;
         }
 
@@ -519,13 +541,16 @@ namespace ScalerCore.Handlers
             if (state == null) return;
             if (!state.LocalEffectsApplied) return;
 
-            if (CameraPosition.instance != null)
+            // Mirror the apply path: VR shrinks skipped the vanilla camera blocks.
+            bool vr = state.VRShrinkApplied;
+
+            if (!vr && CameraPosition.instance != null)
                 CameraPosition.instance.playerOffset = state.OriginalCamOffset;
-            if (CameraCrouchPosition.instance != null)
+            if (!vr && CameraCrouchPosition.instance != null)
                 CameraCrouchPosition.instance.Position = state.OriginalCrouchPos;
-            if (state.CameraCrawl != null)
+            if (!vr && state.CameraCrawl != null)
                 state.CameraCrawl.Position = state.OriginalCrawlPos;
-            if (state.VisionTarget != null)
+            if (!vr && state.VisionTarget != null)
             {
                 state.VisionTarget.StandPosition  = state.VisionStandPos;
                 state.VisionTarget.CrouchPosition = state.VisionCrouchPos;
@@ -544,7 +569,7 @@ namespace ScalerCore.Handlers
             PlayerController.instance?.OverrideSpeed(1f, 0.1f);
             state.PlayerAvatar.OverridePupilSizeActivate(false, 1f, Priority, SpringSpeedIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 0.1f);
             state.PlayerAvatar.OverrideAnimationSpeed(1f, SpringSpeedIn, SpringSpeedOut);
-            if (CameraZoom.Instance != null)
+            if (!vr && CameraZoom.Instance != null)
             {
                 CameraZoom.Instance.playerZoomDefault = state.OriginalFOV;
                 CameraZoom.Instance.OverrideZoomSet(state.OriginalFOV, 0.5f, 3f, 3f, ctrl.gameObject, 999);
@@ -565,6 +590,9 @@ namespace ScalerCore.Handlers
                 PlayerCollisionStand.instance.Offset = state.OriginalStandCheckOffset;
             // Ground check sphere not modified (see ApplyLocalPlayerShrinkEffects).
             PlayerShrinkScreenEffects(ctrl, shrinking: false);
+
+            if (vr)
+                Compat.RepoXRBridge.RestoreViewpointShrink();
 
             state.LocalEffectsApplied = false;
         }

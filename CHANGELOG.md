@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2
+
+### New
+- RepoXR (VR) compatibility. Shrinking a player in VR used to leave their headset viewpoint and hands full-size. RepoXR replaces the flat-screen camera ScalerCore steers with a head-tracked rig, so the camera and FOV nudges had nothing to act on. A shrunk VR player now drops to the right eye height, the hand rig scales with them, and room-scale walking covers proportionally less ground. RepoXR is found by reflection at runtime, so ScalerCore neither references nor depends on it and non-VR play is unchanged. New config toggle `Compatibility / RepoXR VR support` (default on) turns it off.
+
 ## 0.6.1
 
 ### New

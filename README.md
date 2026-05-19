@@ -2,7 +2,7 @@
 
 A scaling library for [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/) modders. Handles the hard parts of scaling game objects -- physics, audio, animation, colliders, NavMesh, multiplayer sync -- so you don't have to.
 
-> **v0.6.0: Loom's arms finally track a shrunken body.** Six new `ScaleOptions` (separate restore speed, impact flash, camera shake, voice pitch, bonk-expand, external Apply lock) plus `ScaleManager.ForceApply` / `ForceRestore` for the owning mod to bypass the lock. Held forceGrabPoint items sit at eye height when shrunken instead of waist. `ScaleController.CurrentOptions` exposes the active session's option snapshot.
+> **v0.6.2: RepoXR (VR) support.** A shrunken player in VR now sees and reaches at the right scale: the headset viewpoint and hand rig shrink with them, and room-scale walking covers proportionally less ground. RepoXR is auto-detected by reflection. It stays an optional integration, never a dependency, and non-VR play is untouched.
 
 If you're building a mod that changes the size of things (shrink rays, growth potions, whatever), ScalerCore gives you a clean API and takes care of the edge cases.
 
