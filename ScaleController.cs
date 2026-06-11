@@ -208,6 +208,11 @@ namespace ScalerCore
             if (!isHost && IsScaled && Handler is PlayerHandler)
                 Handler.OnUpdate(this);
 
+            // Diagnostic — runs on host AND client for valuables so we can correlate
+            // weight-not-reducing reports across both sides. Self-throttling inside.
+            if (IsScaled && Handler is ValuableHandler)
+                ValuableHandler.OnDiagnoseMass(this, isHost);
+
             // Scale animation and force-apply moved to LateUpdate so they always
             // override any game code (PhysGrabObject, ItemEquippable, etc.) that
             // resets transform.localScale during Update or coroutines.
@@ -399,9 +404,19 @@ namespace ScalerCore
                 // Items: keep original mass. Enemies/valuables: clamp between 0.5 and cap.
                 // The grab spring divides force by mass (PhysGrabObject line 788), so mass
                 // below ~0.5 causes violent oscillation when held.
+                float wantRaw = _originalMass * f;
                 if (!_isItem && !_options.PreserveMass)
-                    _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, _options.MassCap);
-                Plugin.Log.LogDebug($"[SC]   mass {_originalMass:F3} → {_rb.mass:F3}  (cap={_options.MassCap:F2}  originalMass locked at {_originalMass:F3})");
+                    _rb.mass = Mathf.Clamp(wantRaw, 0.5f, _options.MassCap);
+                bool clamped = !_isItem && !_options.PreserveMass && wantRaw < 0.5f;
+                Plugin.Log.LogInfo(
+                    $"[SC-DIAG][HOST] SHRINK_APPLY  {_displayName}  " +
+                    $"mass {_originalMass:F3} → {_rb.mass:F3}  wantRaw={wantRaw:F3}  cap={_options.MassCap:F2}" +
+                    (clamped ? "  *FLOOR_HIT*" : "") +
+                    (_isItem ? "  (item, mass untouched)" : "") +
+                    (_options.PreserveMass ? "  (PreserveMass, mass untouched)" : "") +
+                    (_physGrabObject != null
+                        ? $"  pgo.massOrig={_physGrabObject.massOriginal:F3}  pgo.timerAlter={_physGrabObject.timerAlterMass:F2}"
+                        : ""));
             }
 
             // Handler-specific shrink logic (enemy nav/grab, player voice/camera, etc.)
@@ -651,6 +666,18 @@ namespace ScalerCore
             _currentAnimSpeed = _options.Speed;
             Scaled.Add(this);
             if (_rb != null && !_isItem && !_options.PreserveMass) _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, _options.MassCap);
+            if (_rb != null && Handler is ValuableHandler)
+            {
+                float wantRaw = _originalMass * f;
+                bool clamped = !_isItem && !_options.PreserveMass && wantRaw < 0.5f;
+                Plugin.Log.LogInfo(
+                    $"[SC-DIAG][CLIENT] RPC_SHRINK_APPLY  {_displayName}  " +
+                    $"mass {_originalMass:F3} → {_rb.mass:F3}  wantRaw={wantRaw:F3}  cap={_options.MassCap:F2}" +
+                    (clamped ? "  *FLOOR_HIT*" : "") +
+                    (_physGrabObject != null
+                        ? $"  pgo.massOrig={_physGrabObject.massOriginal:F3}"
+                        : ""));
+            }
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize * f;
             ApplyScale(target);
             if (f < 1f) SetForceGrabPoint(false);

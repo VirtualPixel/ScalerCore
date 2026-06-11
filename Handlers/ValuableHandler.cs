@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace ScalerCore.Handlers
 {
     /// <summary>
@@ -12,6 +14,10 @@ namespace ScalerCore.Handlers
         {
             internal ValuableObject ValuableObject = null!;
             internal float LastKnownValue = -1f;
+
+            // Diagnostic: throttle for the per-frame mass-drift watchdog (see OnDiagnoseMass).
+            internal float LastMassDiagTime = -999f;
+            internal float LastMassReported = float.NaN;
         }
 
         public void Setup(ScaleController ctrl)
@@ -77,6 +83,67 @@ namespace ScalerCore.Handlers
         public void OnDestroy(ScaleController ctrl)
         {
             // No valuable-specific destroy logic.
+        }
+
+        /// <summary>
+        /// Diagnostic — runs every frame on both host and client (called from ScaleController.Update
+        /// outside the host gate). Logs a single line every 0.5s with: current rb.mass vs the
+        /// post-shrink target we expect, plus PhysGrabObject's massOriginal/timerAlterMass so we
+        /// can tell if the game's OverrideMass/ResetMass machinery is intercepting our value.
+        /// Also fires an immediate INFO line on the first drift after a steady period.
+        /// </summary>
+        public static void OnDiagnoseMass(ScaleController ctrl, bool isHost)
+        {
+            var state = (State?)ctrl.HandlerState;
+            if (state == null || ctrl._rb == null) return;
+
+            float now = Time.unscaledTime;
+            bool throttle = now - state.LastMassDiagTime < 0.5f;
+
+            float f       = ctrl._options.Factor;
+            float wantRaw = ctrl._originalMass * f;
+            float expected = ctrl._options.PreserveMass
+                ? ctrl._originalMass
+                : Mathf.Clamp(wantRaw, 0.5f, ctrl._options.MassCap);
+            float actual = ctrl._rb.mass;
+            bool drift   = Mathf.Abs(actual - expected) > 0.001f;
+
+            // Immediate log on first divergence even if throttled, so we catch the
+            // exact moment a fight starts.
+            bool noteworthy = drift && !float.IsNaN(state.LastMassReported) &&
+                              Mathf.Abs(actual - state.LastMassReported) > 0.001f;
+
+            if (throttle && !noteworthy) return;
+            state.LastMassDiagTime = now;
+            state.LastMassReported = actual;
+
+            string side  = isHost ? "HOST" : "CLIENT";
+            string tag   = drift ? "MASS_DRIFT" : "MASS_OK  ";
+            bool inCart  = IsInAnyCart(ctrl._physGrabObject);
+            var pgo      = ctrl._physGrabObject;
+
+            Plugin.Log.LogInfo(
+                $"[SC-DIAG][{side}] {tag} {ctrl._displayName}  " +
+                $"rbMass={actual:F3}  want={expected:F3}  wantRaw={wantRaw:F3}  " +
+                $"origMass={ctrl._originalMass:F3}  factor={f:F2}  " +
+                (pgo != null
+                    ? $"pgo.massOrig={pgo.massOriginal:F3}  pgo.alterMass={pgo.alterMassValue:F3}  pgo.timerAlter={pgo.timerAlterMass:F2}  "
+                    : "pgo=null  ") +
+                $"inCart={inCart}");
+        }
+
+        static bool IsInAnyCart(PhysGrabObject? pgo)
+        {
+            if (pgo == null) return false;
+            // Diagnostic-only — FindObjectsOfType is fine here, called at most every 0.5s
+            // per shrunken valuable and not at all when no valuable is scaled.
+            foreach (var inCart in Object.FindObjectsOfType<PhysGrabInCart>())
+            {
+                if (inCart == null || inCart.inCartObjects == null) continue;
+                foreach (var co in inCart.inCartObjects)
+                    if (co != null && co.physGrabObject == pgo) return true;
+            }
+            return false;
         }
     }
 }
