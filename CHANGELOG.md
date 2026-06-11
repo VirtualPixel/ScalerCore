@@ -3,10 +3,13 @@
 ## 0.7.0
 
 ### New
-- Dead Semibot heads can be scaled, behind a new `Targets / Shrink dead heads` toggle that ships OFF (a pea-sized head is easy to lose and reviving from one is its own problem). Flip it on and the shrink ray treats heads like any other prop, minus pocketing.
+- Dead Semibot heads can be scaled. Off by default and policy lives with the calling mod: ScalerCore exposes `ScaleManager.AllowDeadHeads`, ShrinkerGun binds the user-facing `Targets / ShrinkDeadHeads` setting. Heads scale like any other prop, minus pocketing (a pocketed head would fight the revive logic).
 - The shop radio is scalable now. It was the one grabbable prop in the truck the ray refused to touch.
 
 ### Fixed
+- Map collapse (the April 1st event) actually shows up for everyone now. The relay component only existed on the machine that fired the shot, so the start RPC arrived at a PhotonView with nothing listening and non-hosts saw nothing. It attaches on every client at PunManager.Awake.
+- Map collapse runs off Photon's synchronized clock instead of each client integrating its own deltaTime from whenever the RPC landed. Blink period, alarm pitch, and the scale curve are identical on every machine at every instant; late joiners fast-forward into the running collapse instead of missing it.
+- The collapse start RPC validates its sender (master only), and the request RPC checks the sender exists.
 - The CartSteer transpiler announces itself loudly when a game update breaks its pattern instead of silently disabling cart pull-distance scaling. Both failure paths (missing grabber local, no Lerp callsites) log what died and ask for a report.
 
 ## 0.6.2

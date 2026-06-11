@@ -124,6 +124,7 @@ The registry resolves handlers by checking predicates in descending priority ord
 | `ForceUpdateOptions(GameObject target, ScaleOptions options)` | `UpdateOptions` without the lock check. For the mod that owns the lock. |
 | `IsScaled(GameObject target)` | Returns true if the object is currently scaled. |
 | `CleanupAll()` | Restore all scaled objects. Called automatically on level change. |
+| `AllowDeadHeads` | Static bool, default false. Whether scaling may hit dead Semibot heads. Policy belongs to the calling mod: bind a config on your side and assign this (ShrinkerGun does exactly that). ScalerCore itself ships no user-facing settings for it. |
 
 ### ScaleController (MonoBehaviourPunCallbacks)
 

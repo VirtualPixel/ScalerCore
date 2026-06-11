@@ -22,7 +22,16 @@ namespace ScalerCore.AprilFools
         Transform? _level;
         Vector3 _origScale, _pivot;
         bool _shrinking, _shrunken;
+        double _networkStart;
         Coroutine? _routine;
+
+        // One clock for every machine. In a room this is Photon's synchronized
+        // server time, so collapse progress (and with it the blink period, the
+        // alarm pitch, the scale curve) is identical everywhere at every instant
+        // no matter when the start RPC landed. Out of a room, local time.
+        internal static double Clock => PhotonNetwork.InRoom ? PhotonNetwork.Time : Time.timeAsDouble;
+
+        float Elapsed() => (float)(Clock - _networkStart);
 
         readonly List<(Transform t, Transform parent)> _detached = new();
         readonly List<Light> _lights = new();
@@ -53,7 +62,7 @@ namespace ScalerCore.AprilFools
             // Singleplayer / no PUN room . start the local coroutine directly.
             if (!SemiFunc.IsMultiplayer())
             {
-                _instance!.Begin();
+                _instance!.Begin(Clock);
                 return;
             }
 
@@ -63,7 +72,7 @@ namespace ScalerCore.AprilFools
             var relay = MapCollapseRelay.EnsureFor(PunManager.instance);
             if (relay == null)
             {
-                _instance!.Begin();
+                _instance!.Begin(Clock);
                 return;
             }
 
@@ -79,11 +88,20 @@ namespace ScalerCore.AprilFools
         }
 
         // Called by MapCollapseRelay's PunRPC handlers and by OnMapHit's local path.
-        internal static bool TryBegin()
+        // startTime is the shared Clock value the collapse is anchored to; a late
+        // joiner receiving an old timestamp fast-forwards to where everyone else is.
+        internal static bool TryBegin(double startTime)
         {
             if (!CanStart()) return false;
-            _instance!.Begin();
+            _instance!.Begin(startTime);
             return true;
+        }
+
+        // Lets the relay hand the running collapse's anchor to late joiners.
+        internal static bool IsActive(out double startTime)
+        {
+            startTime = _instance != null ? _instance._networkStart : 0;
+            return _instance != null && _instance._shrinking;
         }
 
         static bool CanStart() =>
@@ -92,12 +110,13 @@ namespace ScalerCore.AprilFools
 
         // --- setup -----------------------------------------------------------
 
-        void Begin()
+        void Begin(double networkStart)
         {
             var root = LevelGenerator.Instance.transform.parent;
             _level = root?.Find("Level");
             if (_level == null) return;
 
+            _networkStart = networkStart;
             _origScale = _level.localScale;
             _pivot     = _level.position;
             _shrinking = true;
@@ -391,13 +410,14 @@ namespace ScalerCore.AprilFools
 
         IEnumerator Run()
         {
-            // buildup . shake + single soft scare to set the tone
-            float buildupStart = Time.time;
+            // buildup . shake + single soft scare to set the tone. All timing
+            // hangs off the shared clock anchor; a late joiner whose Elapsed()
+            // is already past 10 skips the buildup and lands mid-collapse.
             bool firstReaction = false;
             bool buildupScared = false;
-            while (Time.time - buildupStart < 10f && _shrinking)
+            while (Elapsed() < 10f && _shrinking)
             {
-                float elapsed = Time.time - buildupStart;
+                float elapsed = Elapsed();
                 float bp = elapsed / 10f;
 
                 if (GameDirector.instance?.CameraShake != null)
@@ -454,7 +474,7 @@ namespace ScalerCore.AprilFools
             // collapse
             var from = _level!.localScale;
             var to   = _origScale * Factor;
-            float t = 0f, nextBeep = 2f, nextDestroy = 1f;
+            float t = Mathf.Max(0f, Elapsed() - 10f), nextBeep = 2f, nextDestroy = 1f;
             int totalToDestroy = Mathf.Max(pendingHinges.Count, pendingObjects.Count);
             float destroyInterval = totalToDestroy > 0 ? (Duration * 0.8f) / totalToDestroy : 2f;
             destroyInterval = Mathf.Clamp(destroyInterval, 0.2f, 3f);
@@ -462,7 +482,8 @@ namespace ScalerCore.AprilFools
 
             while (t < Duration && _shrinking)
             {
-                t += Time.deltaTime;
+                // Shared-clock progress, kept monotonic against clock jitter.
+                t = Mathf.Max(t, Elapsed() - 10f);
                 float p = Mathf.Clamp01(t / Duration);
                 float ease = p * p;
 

@@ -319,9 +319,9 @@ namespace ScalerCore
         public void DispatchShrink(ScaleOptions options)
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
-            if (!Plugin.ShrinkDeadHeads.Value && GetComponent<PlayerDeathHead>() != null)
+            if (!ScaleManager.AllowDeadHeads && GetComponent<PlayerDeathHead>() != null)
             {
-                Plugin.Log.LogDebug($"[SC] DispatchShrink ignored: {_displayName} is a dead Semibot head and ShrinkDeadHeads is off");
+                Plugin.Log.LogDebug($"[SC] DispatchShrink ignored: {_displayName} is a dead Semibot head and ScaleManager.AllowDeadHeads is off");
                 return;
             }
 

@@ -11,6 +11,14 @@ namespace ScalerCore
     public static class ScaleManager
     {
         /// <summary>
+        /// Whether scaling may hit dead Semibot heads. Policy belongs to the
+        /// calling mod (bind a config there and assign this), not to ScalerCore:
+        /// the library carries no user-facing settings of its own. Default off;
+        /// a pea-sized head is easy to lose and reviving from one is its own problem.
+        /// </summary>
+        public static bool AllowDeadHeads { get; set; }
+
+        /// <summary>
         /// Scale an object using the provided options.
         /// Gets existing ScaleController or returns if none attached.
         /// Skips the target if its handler type is not included in <see cref="ScaleOptions.AllowedTargets"/>,
