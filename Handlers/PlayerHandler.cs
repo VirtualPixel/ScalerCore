@@ -23,7 +23,7 @@ namespace ScalerCore.Handlers
         // Pupil override constants
         public const float Multiplier = 3f;
         public const int Priority = 4;          // matches vanilla ceiling eye, tranq, etc.
-        public const float SpringSpeedIn = 3f;   // vanilla range is 1–5
+        public const float SpringSpeedIn = 3f;   // vanilla range is 1-5
         public const float SpringDampIn = 0.5f;
         public const float SpringSpeedOut = 5f;
         public const float SpringDampOut = 0.5f;

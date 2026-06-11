@@ -208,7 +208,7 @@ namespace ScalerCore
             if (!isHost && IsScaled && Handler is PlayerHandler)
                 Handler.OnUpdate(this);
 
-            // Diagnostic — runs on host AND client for valuables so we can correlate
+            // Diagnostic: runs on host AND client for valuables so we can correlate
             // weight-not-reducing reports across both sides. Self-throttling inside.
             if (IsScaled && Handler is ValuableHandler)
                 ValuableHandler.OnDiagnoseMass(this, isHost);
@@ -319,6 +319,11 @@ namespace ScalerCore
         public void DispatchShrink(ScaleOptions options)
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            if (!Plugin.ShrinkDeadHeads.Value && GetComponent<PlayerDeathHead>() != null)
+            {
+                Plugin.Log.LogDebug($"[SC] DispatchShrink ignored: {_displayName} is a dead Semibot head and ShrinkDeadHeads is off");
+                return;
+            }
 
             Plugin.Log.LogDebug($"[SC] DispatchShrink ENTER  {_displayName}  instanceID={GetInstanceID()}  IsScaled={IsScaled}  currentScale={_t.localScale}  GO={gameObject.name}");
             if (IsScaled)

@@ -17,6 +17,11 @@ namespace ScalerCore
         // untouched (the player still shrinks on everyone else's screen).
         internal static ConfigEntry<bool> RepoXRSupport = null!;
 
+        // Dead Semibot heads are grabbable physics props, so the shrink ray CAN
+        // hit them; whether it SHOULD is a lobby-taste question (a pea-sized head
+        // is easy to lose and a pain to revive from). Ships off.
+        internal static ConfigEntry<bool> ShrinkDeadHeads = null!;
+
         void Awake()
         {
             Log = Logger;
@@ -24,6 +29,10 @@ namespace ScalerCore
             RepoXRSupport = Config.Bind(
                 "Compatibility", "RepoXR VR support", true,
                 "Shrink the VR headset viewpoint and hand rig to match player size when RepoXR is installed. Disable if VR scaling misbehaves.");
+
+            ShrinkDeadHeads = Config.Bind(
+                "Targets", "Shrink dead heads", false,
+                "Let scaling hit dead Semibot heads. Off by default: a shrunk head is easy to lose and reviving from a pea is its own problem.");
 
             Harmony = new Harmony("Vippy.ScalerCore");
             Harmony.PatchAll();

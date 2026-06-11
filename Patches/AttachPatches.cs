@@ -12,7 +12,9 @@ namespace ScalerCore
             bool isValuable = __instance.GetComponent<ValuableObject>() != null;
             bool isItem     = __instance.GetComponent<ItemAttributes>() != null;
             bool isCosmetic = __instance.GetComponent<CosmeticWorldObject>() != null;
-            if (!isValuable && !isItem && !isCosmetic) return;
+            bool isDeadHead = __instance.GetComponent<PlayerDeathHead>() != null;
+            bool isRadio    = __instance.GetComponent<ShopRadio>() != null;
+            if (!isValuable && !isItem && !isCosmetic && !isDeadHead && !isRadio) return;
             __instance.gameObject.AddComponent<ScaleController>();
         }
     }

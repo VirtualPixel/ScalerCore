@@ -74,6 +74,12 @@ namespace ScalerCore.Handlers
             // Doors: has PhysGrabHinge. Breaks hinge cleanly for doors that can't scale to pivot.
             Register(new DoorHandler(),
                 go => go.GetComponent<PhysGrabHinge>() != null, 0);
+            // Dead Semibot heads and the shop radio: plain grabbable props, no
+            // marker component above matches them. Generic handler, no pocket
+            // injection. Heads are additionally gated behind the ShrinkDeadHeads
+            // config at dispatch time so the toggle works mid-session.
+            Register(new GenericPropHandler(),
+                go => go.GetComponent<PlayerDeathHead>() != null || go.GetComponent<ShopRadio>() != null, 0);
         }
     }
 }

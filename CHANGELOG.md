@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0
+
+### New
+- Dead Semibot heads can be scaled, behind a new `Targets / Shrink dead heads` toggle that ships OFF (a pea-sized head is easy to lose and reviving from one is its own problem). Flip it on and the shrink ray treats heads like any other prop, minus pocketing.
+- The shop radio is scalable now. It was the one grabbable prop in the truck the ray refused to touch.
+
+### Fixed
+- The CartSteer transpiler announces itself loudly when a game update breaks its pattern instead of silently disabling cart pull-distance scaling. Both failure paths (missing grabber local, no Lerp callsites) log what died and ask for a report.
+
 ## 0.6.2
 
 ### New
@@ -35,8 +44,8 @@
 
 ## 0.5.2
 
-- `PlayerHandler.GetBaseGrabStats` was guarding only one of three StatsManager upgrade dictionaries with `ContainsKey` before indexing all three. v0.4 (or some combination of mods + game state) leaves players with a strength entry but no range/throw entry, so the indexer threw `KeyNotFoundException`. The throw aborted `OnRestore` before `RPC_PlayerPitchCancel` could fire, killed `ApplyLocalPlayerShrinkEffects` partway through (camera/FOV/collision/grab range never scaled, so shrunken players looked tiny but played full-size), and inside `CleanupAll`'s foreach it killed the whole loop after the first bad controller — leaving every player past that one stuck in shrunken state across level transitions. Switched to `TryGetValue`, missing entries default to 0 which matches the "no upgrades purchased" baseline.
-- Non-host clients didn't reset shrink state on level transitions. `RunManager.ChangeLevel` early-returns on non-host during gameplay, so the existing `LevelChangePatch` postfix never reached `CleanupAll` for them. Their `OnUpdate` kept re-asserting voice pitch every frame, overriding the cancel the host RPC'd in. Added a `RunManagerPUN.UpdateLevelRPC` postfix gated to non-host — that RPC fires on every client via `AllBuffered`, so the cleanup runs everywhere.
+- `PlayerHandler.GetBaseGrabStats` was guarding only one of three StatsManager upgrade dictionaries with `ContainsKey` before indexing all three. v0.4 (or some combination of mods + game state) leaves players with a strength entry but no range/throw entry, so the indexer threw `KeyNotFoundException`. The throw aborted `OnRestore` before `RPC_PlayerPitchCancel` could fire, killed `ApplyLocalPlayerShrinkEffects` partway through (camera/FOV/collision/grab range never scaled, so shrunken players looked tiny but played full-size), and inside `CleanupAll`'s foreach it killed the whole loop after the first bad controller, leaving every player past that one stuck in shrunken state across level transitions. Switched to `TryGetValue`, missing entries default to 0 which matches the "no upgrades purchased" baseline.
+- Non-host clients didn't reset shrink state on level transitions. `RunManager.ChangeLevel` early-returns on non-host during gameplay, so the existing `LevelChangePatch` postfix never reached `CleanupAll` for them. Their `OnUpdate` kept re-asserting voice pitch every frame, overriding the cancel the host RPC'd in. Added a `RunManagerPUN.UpdateLevelRPC` postfix gated to non-host; that RPC fires on every client via `AllBuffered`, so the cleanup runs everywhere.
 
 ## 0.5.1
 
@@ -61,7 +70,7 @@
 - Final crush damage was stacking on every player in multiplayer. Every client was running the kill loop and `PlayerHealth.Hurt` routes through `HurtRPC`. Host-only now.
 
 ### Improvements
-- Map collapse network sync moved from `PhotonNetwork.RaiseEvent` byte codes (198/199) to a `[PunRPC]` component piggybacked on `PunManager`, no more arbitrary 0–199 numbers that could collide with another mod.
+- Map collapse network sync moved from `PhotonNetwork.RaiseEvent` byte codes (198/199) to a `[PunRPC]` component piggybacked on `PunManager`, no more arbitrary 0-199 numbers that could collide with another mod.
 - Map collapse chat is more chaotic now: taxman reacts in emojis only, panic messages come from random players in the lobby, larger pool of lines, no immediate repeats.
 
 ## 0.4.4

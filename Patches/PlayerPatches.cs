@@ -253,12 +253,14 @@ namespace ScalerCore
 
             if (grabberIndex == -1)
             {
-                Plugin.Log.LogWarning("[SC] CartSteer transpiler: Physgrabber local not found");
+                Plugin.Log.LogWarning("[SC] CartSteer transpiler: second PhysGrabber local not found. " +
+                    "Cart pull-distance scaling is DISABLED this session; if this appears after a game update, report it.");
                 foreach (var code in instructions)
                     yield return code;
                 yield break;
             }
 
+            int injected = 0;
             foreach (var code in instructions)
             {
                 yield return code;
@@ -267,8 +269,17 @@ namespace ScalerCore
                     yield return new CodeInstruction(OpCodes.Ldarg_0);
                     yield return new CodeInstruction(OpCodes.Ldloc, grabberIndex);
                     yield return new CodeInstruction(OpCodes.Call, scaleMethod);
+                    injected++;
                 }
             }
+
+            // A wrong-typed local would fail IL verification at patch time and
+            // Harmony reports that itself. The silent failure mode is the Lerp
+            // calls disappearing in a game update: the loop above then matches
+            // nothing and the feature dies quietly unless we shout here.
+            if (injected == 0)
+                Plugin.Log.LogWarning("[SC] CartSteer transpiler: no Mathf.Lerp callsites matched. " +
+                    "Cart pull-distance scaling is DISABLED this session; if this appears after a game update, report it.");
         }
     }
 

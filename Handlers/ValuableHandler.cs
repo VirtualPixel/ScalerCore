@@ -86,7 +86,7 @@ namespace ScalerCore.Handlers
         }
 
         /// <summary>
-        /// Diagnostic — runs every frame on both host and client (called from ScaleController.Update
+        /// Diagnostic: runs every frame on both host and client (called from ScaleController.Update
         /// outside the host gate). Logs a single line every 0.5s with: current rb.mass vs the
         /// post-shrink target we expect, plus PhysGrabObject's massOriginal/timerAlterMass so we
         /// can tell if the game's OverrideMass/ResetMass machinery is intercepting our value.
@@ -135,7 +135,7 @@ namespace ScalerCore.Handlers
         static bool IsInAnyCart(PhysGrabObject? pgo)
         {
             if (pgo == null) return false;
-            // Diagnostic-only — FindObjectsOfType is fine here, called at most every 0.5s
+            // Diagnostic-only; FindObjectsOfType is fine here, called at most every 0.5s
             // per shrunken valuable and not at all when no valuable is scaled.
             foreach (var inCart in Object.FindObjectsOfType<PhysGrabInCart>())
             {

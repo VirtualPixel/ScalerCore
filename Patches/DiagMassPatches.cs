@@ -4,7 +4,7 @@ using ScalerCore.Handlers;
 
 namespace ScalerCore.Patches
 {
-    // Diagnostic — figure out why shrunken valuables aren't losing weight in the cart.
+    // Diagnostic: figure out why shrunken valuables aren't losing weight in the cart.
     // Logs every game-side mass mutation on a scaled valuable with the caller's stack frame,
     // so we can see exactly who's fighting ScalerCore's shrink-time _rb.mass write.
     [HarmonyPatch(typeof(PhysGrabObject), nameof(PhysGrabObject.OverrideMass))]
