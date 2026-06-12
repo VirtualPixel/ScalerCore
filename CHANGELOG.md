@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0
+## 1.0.0
 
 ### New
 - Dead Semibot heads can be scaled. Off by default and policy lives with the calling mod: ScalerCore exposes `ScaleManager.AllowDeadHeads`, ShrinkerGun binds the user-facing `Targets / ShrinkDeadHeads` setting. Heads scale like any other prop, minus pocketing (a pocketed head would fight the revive logic).
