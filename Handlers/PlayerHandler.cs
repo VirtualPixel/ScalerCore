@@ -20,8 +20,11 @@ namespace ScalerCore.Handlers
             return (strengthFactor, factor);
         }
 
-        // Pupil override constants
+        // Pupil override: big cute pupils when tiny, small hard pupils when big.
         public const float Multiplier = 3f;
+        public const float GiantMultiplier = 0.75f;
+        internal static float PupilFor(ScaleController ctrl) =>
+            ctrl._options.Factor < 1f ? Multiplier : GiantMultiplier;
         public const int Priority = 4;          // matches vanilla ceiling eye, tranq, etc.
         public const float SpringSpeedIn = 3f;   // vanilla range is 1-5
         public const float SpringDampIn = 0.5f;
@@ -66,6 +69,11 @@ namespace ScalerCore.Handlers
             // FOV / camera
             internal float OriginalFOV;
             internal float OriginalNearClip;
+
+            // Head bob stride correction (growth only)
+            internal float OriginalBobUpSpeed;
+            internal float OriginalBobSideSpeed;
+            internal bool BobAdjusted;
 
             // Pupil transition tracking
             internal bool WasExpressing;
@@ -366,7 +374,7 @@ namespace ScalerCore.Handlers
                         // Use a gentle spring when returning from expression so pupils don't pop.
                         // Normal shrink uses SpringSpeedIn (fast), expression recovery uses a slower rate.
                         float springIn = state.WasExpressing ? PupilReturnSpeed : SpringSpeedIn;
-                        state.PlayerAvatar.OverridePupilSize(Multiplier, Priority, springIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 9999f);
+                        state.PlayerAvatar.OverridePupilSize(PupilFor(ctrl), Priority, springIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 9999f);
                     }
                     else
                     {
@@ -386,9 +394,9 @@ namespace ScalerCore.Handlers
                         {
                             // Gentle lerp when returning from expression, instant otherwise.
                             if (state.WasExpressing)
-                                eyes.pupilSizeMultiplier = Mathf.Lerp(eyes.pupilSizeMultiplier, Multiplier, Time.deltaTime * PupilReturnSpeed);
+                                eyes.pupilSizeMultiplier = Mathf.Lerp(eyes.pupilSizeMultiplier, PupilFor(ctrl), Time.deltaTime * PupilReturnSpeed);
                             else
-                                eyes.pupilSizeMultiplier = Multiplier;
+                                eyes.pupilSizeMultiplier = PupilFor(ctrl);
                         }
                     }
                     else
@@ -483,10 +491,30 @@ namespace ScalerCore.Handlers
             else Plugin.Log.LogWarning("[SC] PhysGrabber.instance null, grab range not scaled");
             float speedMult = Mathf.Lerp(1f, f, 0.5f);
             PlayerController.instance?.OverrideSpeed(speedMult, 9999f);
+            // CameraBob advances its cycle by overrideSpeedMultiplier, and footsteps
+            // fire when the cycle wraps, so the giant's speed boost made the bob AND
+            // the steps 1.5x faster. Big things take longer strides: counter the
+            // coupling so the cadence lands at the animation multiplier instead.
+            // Growth only; the shipped shrink feel keeps the vanilla coupling.
+            if (f > 1f && CameraBob.Instance != null)
+            {
+                state.OriginalBobUpSpeed   = CameraBob.Instance.bobUpLerpSpeed;
+                state.OriginalBobSideSpeed = CameraBob.Instance.bobSideLerpSpeed;
+                float stride = ctrl._options.AnimSpeedMultiplier / Mathf.Max(0.1f, speedMult);
+                CameraBob.Instance.bobUpLerpSpeed   = state.OriginalBobUpSpeed   * stride;
+                CameraBob.Instance.bobSideLerpSpeed = state.OriginalBobSideSpeed * stride;
+                state.BobAdjusted = true;
+            }
             if (!vr && CameraZoom.Instance != null)
             {
                 state.OriginalFOV = CameraZoom.Instance.playerZoomDefault;
-                float newFOV = state.OriginalFOV + 20f * (1f - f);
+                // Shrink widens linearly (+12 at 0.4x), unchanged since 0.5.x. The
+                // same line extrapolated for growth was -20 at 2x and unbounded
+                // past that, way too much tunnel; giants get the same direction at
+                // 40% strength, floored at -8.
+                float fovShift = 20f * (1f - f);
+                if (f > 1f) fovShift = Mathf.Max(fovShift * 0.4f, -8f);
+                float newFOV = state.OriginalFOV + fovShift;
                 CameraZoom.Instance.playerZoomDefault = newFOV;
                 CameraZoom.Instance.OverrideZoomSet(newFOV, 9999f, 3f, 3f, ctrl.gameObject, 999);
             }
@@ -567,6 +595,12 @@ namespace ScalerCore.Handlers
                 PhysGrabber.instance.minDistanceFromPlayerOriginal = state.OriginalGrabMinDist;
             }
             PlayerController.instance?.OverrideSpeed(1f, 0.1f);
+            if (state.BobAdjusted && CameraBob.Instance != null)
+            {
+                CameraBob.Instance.bobUpLerpSpeed   = state.OriginalBobUpSpeed;
+                CameraBob.Instance.bobSideLerpSpeed = state.OriginalBobSideSpeed;
+                state.BobAdjusted = false;
+            }
             state.PlayerAvatar.OverridePupilSizeActivate(false, 1f, Priority, SpringSpeedIn, SpringDampIn, SpringSpeedOut, SpringDampOut, 0.1f);
             state.PlayerAvatar.OverrideAnimationSpeed(1f, SpringSpeedIn, SpringSpeedOut);
             if (!vr && CameraZoom.Instance != null)

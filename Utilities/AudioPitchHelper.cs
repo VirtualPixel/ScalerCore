@@ -23,7 +23,7 @@ namespace ScalerCore.Utilities
         /// Sound is a plain serializable class (not a Component), so GetComponentsInChildren
         /// won't find it, we walk fields via reflection instead.
         /// </summary>
-        static Sound[] GatherSounds(Component root)
+        internal static Sound[] GatherSounds(Component root)
         {
             var found = new List<Sound>();
             foreach (var mb in root.GetComponentsInChildren<MonoBehaviour>(includeInactive: true))
@@ -45,6 +45,18 @@ namespace ScalerCore.Utilities
         /// Apply pitch multiplier to all Sound objects under searchRoot.
         /// Called once at shrink time. Multiplier: 1 + (1 - factor) * 0.5.
         /// </summary>
+        // Pitch a transient effect object (a spawned explosion) once. No capture,
+        // no restore: the instance and its sounds die with the effect.
+        internal static void PitchOneShot(Component root, float factor)
+        {
+            float mult = Mathf.Clamp(1f + (1f - factor) * 0.5f, 0.35f, 2f);
+            foreach (var s in GatherSounds(root))
+            {
+                s.Pitch *= mult;
+                s.LoopPitch *= mult;
+            }
+        }
+
         internal void ApplyPitch(Component searchRoot, float factor)
         {
             // Linear around 1: chipmunk when small, deep when big. Clamped so

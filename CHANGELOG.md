@@ -7,6 +7,8 @@
 - The shop radio is scalable now. It was the one grabbable prop in the truck the ray refused to touch.
 
 ### New (growth support rounded out)
+- Giant feel pass from playtesting: FOV shift for growth runs at 40% strength floored at -8 degrees (the linear curve hit -20 at 2x and kept going); head bob and footstep cadence slow to match the longer strides instead of speeding up with the movement boost (CameraBob couples its cycle to the speed multiplier, and footsteps fire per bob cycle); pupils go small and hard when big instead of inheriting the tiny-player dilation; growth footsteps land deeper (0.55x pitch).
+- Scaled enemies' explosions scale with them. Enemy ability code passes hardcoded numbers to the explosion spawner (a Bang head always went up at size 1, damage 30), so size, damage, and force now multiply by the enemy's factor at spawn, and the blast audio pitches with it. A grown Bang is a bassy BOOM; a shrunk one pops. Items are untouched, their explosion fields already scale.
 - `ScaleOptions.Growth` preset: twice the size, heavier, a touch faster, slower deliberate animation, low footsteps. Voice and entity sounds already deepen automatically from the factor; the preset covers the knobs that don't derive from it.
 - Voice and entity sound pitch clamps to a usable band (0.35x to 2x). The linear curve ran negative past 3x growth, which inverted the audio.
 

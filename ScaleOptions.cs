@@ -103,7 +103,7 @@ namespace ScalerCore
             MassCap                   = 500f,
             SpeedFactor               = 1.25f,
             AnimSpeedMultiplier       = 0.75f,
-            FootstepPitchMultiplier   = 0.7f,
+            FootstepPitchMultiplier   = 0.55f,
             AllowedTargets            = ScaleTargets.All,
             InvertedMode              = false,
             SuppressValueDropExpand   = false,
