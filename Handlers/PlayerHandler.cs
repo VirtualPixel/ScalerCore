@@ -492,11 +492,11 @@ namespace ScalerCore.Handlers
             float speedMult = Mathf.Lerp(1f, f, 0.5f);
             PlayerController.instance?.OverrideSpeed(speedMult, 9999f);
             // CameraBob advances its cycle by overrideSpeedMultiplier, and footsteps
-            // fire when the cycle wraps, so the giant's speed boost made the bob AND
-            // the steps 1.5x faster. Big things take longer strides: counter the
-            // coupling so the cadence lands at the animation multiplier instead.
-            // Growth only; the shipped shrink feel keeps the vanilla coupling.
-            if (f > 1f && CameraBob.Instance != null)
+            // fire when the cycle wraps, so the speed change dragged the bob AND the
+            // step rate with it: giants stepped faster, tiny players slower. Strides
+            // should follow body size instead, so the cadence lands on the animation
+            // multiplier: long heavy stomps when big, quick patter when small.
+            if (CameraBob.Instance != null)
             {
                 state.OriginalBobUpSpeed   = CameraBob.Instance.bobUpLerpSpeed;
                 state.OriginalBobSideSpeed = CameraBob.Instance.bobSideLerpSpeed;
