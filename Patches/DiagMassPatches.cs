@@ -12,6 +12,7 @@ namespace ScalerCore.Patches
     {
         static void Prefix(PhysGrabObject __instance, float value, float time)
         {
+            if (!Plugin.DiagMass) return;
             var ctrl = __instance.GetComponent<ScaleController>();
             if (ctrl == null || !ctrl.IsScaled) return;
             if (ctrl.TargetType != ScaleTargets.Valuables) return;
@@ -29,6 +30,7 @@ namespace ScalerCore.Patches
     {
         static void Prefix(PhysGrabObject __instance)
         {
+            if (!Plugin.DiagMass) return;
             var ctrl = __instance.GetComponent<ScaleController>();
             if (ctrl == null || !ctrl.IsScaled) return;
             if (ctrl.TargetType != ScaleTargets.Valuables) return;

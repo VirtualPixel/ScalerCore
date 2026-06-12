@@ -94,6 +94,7 @@ namespace ScalerCore.Handlers
         /// </summary>
         public static void OnDiagnoseMass(ScaleController ctrl, bool isHost)
         {
+            if (!Plugin.DiagMass) return;
             var state = (State?)ctrl.HandlerState;
             if (state == null || ctrl._rb == null) return;
 

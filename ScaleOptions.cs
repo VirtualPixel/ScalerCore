@@ -88,8 +88,36 @@ namespace ScalerCore
         public bool RejectExternalApply;
 
         /// <summary>
+        /// Defaults for a growth mod: twice the size, heavier, a touch faster,
+        /// slower deliberate animation, low footsteps. Voice and entity sounds
+        /// deepen automatically from Factor; these are the knobs that don't.
+        /// Override fields as needed, same as Default.
+        /// </summary>
+        public static ScaleOptions Growth => new()
+        {
+            Factor                    = 2.0f,
+            Duration                  = 0f,
+            Speed                     = 2.0f,
+            RestoreSpeed              = 0f,
+            BonkImmuneDuration        = 5.0f,
+            MassCap                   = 500f,
+            SpeedFactor               = 1.25f,
+            AnimSpeedMultiplier       = 0.75f,
+            FootstepPitchMultiplier   = 0.7f,
+            AllowedTargets            = ScaleTargets.All,
+            InvertedMode              = false,
+            SuppressValueDropExpand   = false,
+            PreserveMass              = false,
+            SuppressImpactFlash       = false,
+            SuppressCameraShake       = false,
+            SuppressVoicePitch        = false,
+            IgnoreBonkExpand          = false,
+            RejectExternalApply       = false,
+        };
+
+        /// <summary>
         /// Sensible defaults for a shrink ray. Override fields as needed.
-        /// For growth mods, set Factor > 1 and increase MassCap.
+        /// For growth mods, start from <see cref="Growth"/> instead.
         /// </summary>
         public static ScaleOptions Default => new()
         {

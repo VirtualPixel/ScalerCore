@@ -17,6 +17,12 @@ namespace ScalerCore
         // untouched (the player still shrinks on everyone else's screen).
         internal static ConfigEntry<bool> RepoXRSupport = null!;
 
+        // Mass-drift hunting instrumentation. Heavy (per-physics-call logs, a
+        // stack walk in the patches), so it only arms when the dev sets
+        // SCALERCORE_DIAG=1 in the environment. Ships silent, costs nothing.
+        internal static readonly bool DiagMass =
+            System.Environment.GetEnvironmentVariable("SCALERCORE_DIAG") == "1";
+
         void Awake()
         {
             Log = Logger;

@@ -158,7 +158,7 @@ namespace ScalerCore.Handlers
                 if (state.PlayerAvatar.voiceChat != null)
                 {
                     float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
-                    float pitchMult = 1f + (1f - factor) * 0.5f;
+                    float pitchMult = Mathf.Clamp(1f + (1f - factor) * 0.5f, 0.35f, 2f);
                     state.PlayerAvatar.voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 9999f);
                     Plugin.Log.LogDebug($"[SC] VOICE PITCH SET  {ctrl._displayName}  pitch={pitchMult:F2}  isLocal={state.PlayerAvatar.isLocal}  isMine={ctrl._networkPV?.IsMine}");
                 }
@@ -232,7 +232,7 @@ namespace ScalerCore.Handlers
                 if (!ctrl._options.SuppressVoicePitch && state.PlayerAvatar.voiceChat != null)
                 {
                     float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
-                    float pitchMult = 1f + (1f - factor) * 0.5f;
+                    float pitchMult = Mathf.Clamp(1f + (1f - factor) * 0.5f, 0.35f, 2f);
                     state.PlayerAvatar.voiceChat.overridePitchMultiplierTarget = pitchMult;
                     state.PlayerAvatar.voiceChat.overridePitchTimer = 0.2f;
                     state.PlayerAvatar.voiceChat.overridePitchIsActive = true;

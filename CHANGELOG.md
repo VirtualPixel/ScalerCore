@@ -6,7 +6,13 @@
 - Dead Semibot heads can be scaled. Off by default and policy lives with the calling mod: ScalerCore exposes `ScaleManager.AllowDeadHeads`, ShrinkerGun binds the user-facing `Targets / ShrinkDeadHeads` setting. Heads scale like any other prop, minus pocketing (a pocketed head would fight the revive logic).
 - The shop radio is scalable now. It was the one grabbable prop in the truck the ray refused to touch.
 
+### New (growth support rounded out)
+- `ScaleOptions.Growth` preset: twice the size, heavier, a touch faster, slower deliberate animation, low footsteps. Voice and entity sounds already deepen automatically from the factor; the preset covers the knobs that don't derive from it.
+- Voice and entity sound pitch clamps to a usable band (0.35x to 2x). The linear curve ran negative past 3x growth, which inverted the audio.
+
 ### Fixed
+- Every ScaleController RPC validates its sender now. Scale state (`RPC_Shrink`/`RPC_Expand`/pitch cancel) only accepts the master; client requests (manual scale, bonk expand, inverted reshrink) only accept the player who owns the view. Before this, anyone in the room could spoof a shrink at any controller.
+- The mass-drift diagnostics (per-physics-call logs with a stack walk) only arm with SCALERCORE_DIAG=1 in the environment. They were logging at Info for every scaled valuable.
 - Map collapse (the April 1st event) actually shows up for everyone now. The relay component only existed on the machine that fired the shot, so the start RPC arrived at a PhotonView with nothing listening and non-hosts saw nothing. It attaches on every client at PunManager.Awake.
 - Map collapse runs off Photon's synchronized clock instead of each client integrating its own deltaTime from whenever the RPC landed. Blink period, alarm pitch, and the scale curve are identical on every machine at every instant; late joiners fast-forward into the running collapse instead of missing it.
 - The collapse start RPC validates its sender (master only), and the request RPC checks the sender exists.

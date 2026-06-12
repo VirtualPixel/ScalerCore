@@ -47,7 +47,10 @@ namespace ScalerCore.Utilities
         /// </summary>
         internal void ApplyPitch(Component searchRoot, float factor)
         {
-            float mult = 1f + (1f - factor) * 0.5f;
+            // Linear around 1: chipmunk when small, deep when big. Clamped so
+            // extreme growth factors bottom out at a usable rumble instead of
+            // running the formula negative (factor 3+ would invert the audio).
+            float mult = Mathf.Clamp(1f + (1f - factor) * 0.5f, 0.35f, 2f);
             _pitchedSounds          = GatherSounds(searchRoot);
             _soundOriginalPitch     = _pitchedSounds.Select(s => s.Pitch).ToArray();
             _soundOriginalLoopPitch = _pitchedSounds

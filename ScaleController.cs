@@ -413,7 +413,8 @@ namespace ScalerCore
                 if (!_isItem && !_options.PreserveMass)
                     _rb.mass = Mathf.Clamp(wantRaw, 0.5f, _options.MassCap);
                 bool clamped = !_isItem && !_options.PreserveMass && wantRaw < 0.5f;
-                Plugin.Log.LogInfo(
+                if (Plugin.DiagMass)
+                Plugin.Log.LogDebug(
                     $"[SC-DIAG][HOST] SHRINK_APPLY  {_displayName}  " +
                     $"mass {_originalMass:F3} → {_rb.mass:F3}  wantRaw={wantRaw:F3}  cap={_options.MassCap:F2}" +
                     (clamped ? "  *FLOOR_HIT*" : "") +
@@ -646,8 +647,10 @@ namespace ScalerCore
         };
 
         [PunRPC]
-        void RPC_Shrink(Vector3 target, float[] opts, bool[] flags)
+        void RPC_Shrink(Vector3 target, float[] opts, bool[] flags, PhotonMessageInfo info = default)
         {
+            // Scale state only ever flows host -> clients; drop spoofed sends.
+            if (PhotonNetwork.InRoom && (info.Sender == null || info.Sender != PhotonNetwork.MasterClient)) return;
             Plugin.Log.LogDebug($"[SC] RPC_Shrink RECV  {_displayName}  target={target}  factor={opts[0]}  speed={opts[1]}  handler={Handler?.GetType().Name ?? "null"}");
             _options.Factor                = opts[0];
             _options.Speed                 = opts[1];
@@ -675,7 +678,8 @@ namespace ScalerCore
             {
                 float wantRaw = _originalMass * f;
                 bool clamped = !_isItem && !_options.PreserveMass && wantRaw < 0.5f;
-                Plugin.Log.LogInfo(
+                if (Plugin.DiagMass)
+                Plugin.Log.LogDebug(
                     $"[SC-DIAG][CLIENT] RPC_SHRINK_APPLY  {_displayName}  " +
                     $"mass {_originalMass:F3} → {_rb.mass:F3}  wantRaw={wantRaw:F3}  cap={_options.MassCap:F2}" +
                     (clamped ? "  *FLOOR_HIT*" : "") +
@@ -704,8 +708,9 @@ namespace ScalerCore
         }
 
         [PunRPC]
-        void RPC_Expand()
+        void RPC_Expand(PhotonMessageInfo info = default)
         {
+            if (PhotonNetwork.InRoom && (info.Sender == null || info.Sender != PhotonNetwork.MasterClient)) return;
             IsScaled = false;
             Scaled.Remove(this);
             if (_rb != null) _rb.mass = _originalMass;
@@ -725,13 +730,23 @@ namespace ScalerCore
         }
 
         [PunRPC]
-        void RPC_PlayerPitchCancel()
+        void RPC_PlayerPitchCancel(PhotonMessageInfo info = default)
         {
+            if (PhotonNetwork.InRoom && (info.Sender == null || info.Sender != PhotonNetwork.MasterClient)) return;
             var state = HandlerState as PlayerHandler.State;
             state?.PlayerAvatar.voiceChat?.OverridePitchCancel();
         }
 
         // --- client-to-host expand requests ---
+
+        // Requests are sent through the controller's own view with IsMine, so a
+        // legit sender always owns the view. Anyone else asking to (un)shrink
+        // somebody is dropped.
+        bool SenderOwnsView(PhotonMessageInfo info)
+        {
+            if (!PhotonNetwork.InRoom) return true;
+            return info.Sender != null && _networkPV != null && info.Sender == _networkPV.Owner;
+        }
 
         // Called by PlayerBonkPatch when ANY client detects local player damage while shrunken.
         // Host processes directly; non-host sends RPC to host.
@@ -765,9 +780,10 @@ namespace ScalerCore
         }
 
         [PunRPC]
-        void RPC_RequestInvertedReshrink()
+        void RPC_RequestInvertedReshrink(PhotonMessageInfo info = default)
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            if (!SenderOwnsView(info)) return;
             if (IsScaled || !_invertedActive) return;
             var opts = ScaleOptions.Default;
             opts.InvertedMode = true;
@@ -792,9 +808,10 @@ namespace ScalerCore
         }
 
         [PunRPC]
-        void RPC_RequestShrink()
+        void RPC_RequestShrink(PhotonMessageInfo info = default)
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            if (!SenderOwnsView(info)) return;
             if (!AllowManualScale) return;
             if (IsScaled) return;
             DispatchShrink(ScaleOptions.Default);
@@ -815,9 +832,10 @@ namespace ScalerCore
         }
 
         [PunRPC]
-        void RPC_RequestExpand(bool checkImmunity)
+        void RPC_RequestExpand(bool checkImmunity, PhotonMessageInfo info = default)
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            if (!SenderOwnsView(info)) return;
             if (!IsScaled) return;
             if (checkImmunity)
             {
