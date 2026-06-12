@@ -42,7 +42,7 @@ namespace ScalerCore
             var ctrl = EnemyController(__instance);
             if (ctrl == null || __result == null) return;
             // The boom matches the body: big enemy, bassy explosion.
-            AudioPitchHelper.PitchOneShot(__result, ctrl._options.Factor);
+            AudioPitchHelper.PitchOneShot(__result, ctrl._options.Factor, ctrl._options.AudioPresence);
         }
     }
 }

@@ -17,9 +17,14 @@ namespace ScalerCore.Utilities
         // (AudioSource clamps at 1, so this mostly lifts quieter sounds),
         // ReverbMix leans into whatever reverb zone the room has for the echo,
         // and falloff scales with the factor so a giant carries further while a
-        // tiny one gets sneaky-quiet at range.
-        const float GrowVolumeBoost = 1.25f;
-        const float GrowReverbBoost = 1.4f;
+        // tiny one gets sneaky-quiet at range. All of it rides one knob,
+        // ScaleOptions.AudioPresence: these are the strengths at presence 1.
+        const float GrowVolumeBoost = 0.25f;
+        const float GrowReverbBoost = 0.4f;
+
+        static float VolumeMult(float presence) => 1f + GrowVolumeBoost * Mathf.Clamp01(presence);
+        static float ReverbMult(float presence) => 1f + GrowReverbBoost * Mathf.Clamp01(presence);
+        static float FalloffMult(float factor, float presence) => Mathf.Lerp(1f, factor, Mathf.Clamp01(presence));
 
         // Per-instance state, populated at shrink, cleared at expand.
         Sound[]?  _pitchedSounds;
@@ -61,7 +66,7 @@ namespace ScalerCore.Utilities
 
         // Pitch and presence for a transient effect object (a spawned explosion).
         // No capture, no restore: the instance and its sounds die with the effect.
-        internal static void PitchOneShot(Component root, float factor)
+        internal static void PitchOneShot(Component root, float factor, float presence)
         {
             float mult = PitchMult(factor);
             bool grown = factor > 1f;
@@ -69,16 +74,16 @@ namespace ScalerCore.Utilities
             {
                 s.Pitch *= mult;
                 s.LoopPitch *= mult;
-                s.FalloffMultiplier *= factor;
+                s.FalloffMultiplier *= FalloffMult(factor, presence);
                 if (grown)
                 {
-                    s.Volume = Mathf.Min(1f, s.Volume * GrowVolumeBoost);
-                    s.ReverbMix = Mathf.Min(1.1f, s.ReverbMix * GrowReverbBoost);
+                    s.Volume = Mathf.Min(1f, s.Volume * VolumeMult(presence));
+                    s.ReverbMix = Mathf.Min(1.1f, s.ReverbMix * ReverbMult(presence));
                 }
             }
         }
 
-        internal void ApplyPitch(Component searchRoot, float factor)
+        internal void ApplyPitch(Component searchRoot, float factor, float presence)
         {
             float mult = PitchMult(factor);
             bool grown = factor > 1f;
@@ -101,13 +106,13 @@ namespace ScalerCore.Utilities
                 s.LoopPitch = lp * mult;
 
                 // A giant carries further, a tiny one fades sooner.
-                s.FalloffMultiplier = _soundOriginalFalloff[i] * factor;
+                s.FalloffMultiplier = _soundOriginalFalloff[i] * FalloffMult(factor, presence);
 
                 if (grown)
                 {
-                    s.Volume = Mathf.Min(1f, _soundOriginalVolume[i] * GrowVolumeBoost);
-                    s.LoopVolume = Mathf.Min(1f, _soundOriginalLoopVolume[i] * GrowVolumeBoost);
-                    s.ReverbMix = Mathf.Min(1.1f, _soundOriginalReverb[i] * GrowReverbBoost);
+                    s.Volume = Mathf.Min(1f, _soundOriginalVolume[i] * VolumeMult(presence));
+                    s.LoopVolume = Mathf.Min(1f, _soundOriginalLoopVolume[i] * VolumeMult(presence));
+                    s.ReverbMix = Mathf.Min(1.1f, _soundOriginalReverb[i] * ReverbMult(presence));
                 }
 
                 // Immediately apply to any currently-playing loop source so it doesn't

@@ -75,6 +75,11 @@ namespace ScalerCore.Handlers
             internal float OriginalBobSideSpeed;
             internal bool BobAdjusted;
 
+            // Voice presence (grown players): captured source params
+            internal float OriginalVoiceReverb;
+            internal float OriginalVoiceMaxDist;
+            internal bool VoicePresenceApplied;
+
             // Pupil transition tracking
             internal bool WasExpressing;
 
@@ -168,6 +173,22 @@ namespace ScalerCore.Handlers
                     float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
                     float pitchMult = Mathf.Clamp(1f + (1f - factor) * 0.5f, 0.35f, 2f);
                     state.PlayerAvatar.voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 9999f);
+
+                    // Same presence treatment the entity sounds get: a giant's voice
+                    // leans into the room reverb and carries further. Volume is left
+                    // alone, mic gain belongs to the player. Applied per client on
+                    // the voice source, rides ScaleOptions.AudioPresence.
+                    var voiceSrc = state.PlayerAvatar.voiceChat.audioSource;
+                    if (ctrl._options.Factor > 1f && ctrl._options.AudioPresence > 0f
+                        && voiceSrc != null && !state.VoicePresenceApplied)
+                    {
+                        float presence = Mathf.Clamp01(ctrl._options.AudioPresence);
+                        state.OriginalVoiceReverb  = voiceSrc.reverbZoneMix;
+                        state.OriginalVoiceMaxDist = voiceSrc.maxDistance;
+                        voiceSrc.reverbZoneMix = Mathf.Min(1.1f, state.OriginalVoiceReverb * (1f + 0.4f * presence));
+                        voiceSrc.maxDistance   = state.OriginalVoiceMaxDist * Mathf.Lerp(1f, ctrl._options.Factor, presence);
+                        state.VoicePresenceApplied = true;
+                    }
                     Plugin.Log.LogDebug($"[SC] VOICE PITCH SET  {ctrl._displayName}  pitch={pitchMult:F2}  isLocal={state.PlayerAvatar.isLocal}  isMine={ctrl._networkPV?.IsMine}");
                 }
                 else
@@ -211,9 +232,22 @@ namespace ScalerCore.Handlers
             }
             else if (!ctrl._options.SuppressVoicePitch)
                 state.PlayerAvatar.voiceChat?.OverridePitchCancel();
+            RestoreVoicePresence(state);
             bool isLocalPlayer = !PhotonNetwork.InRoom || (ctrl._networkPV != null && ctrl._networkPV.IsMine);
             if (isLocalPlayer)
                 RestoreLocalPlayerShrinkEffects(ctrl);
+        }
+
+        internal static void RestoreVoicePresence(State state)
+        {
+            if (!state.VoicePresenceApplied) return;
+            var src = state.PlayerAvatar.voiceChat?.audioSource;
+            if (src != null)
+            {
+                src.reverbZoneMix = state.OriginalVoiceReverb;
+                src.maxDistance   = state.OriginalVoiceMaxDist;
+            }
+            state.VoicePresenceApplied = false;
         }
 
         /// <summary>

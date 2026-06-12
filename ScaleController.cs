@@ -437,7 +437,7 @@ namespace ScalerCore
             if (!_options.SuppressVoicePitch)
             {
                 var ep = GetComponentInParent<EnemyParent>();
-                _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, _options.Factor);
+                _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, _options.Factor, _options.AudioPresence);
             }
 
             // Scale item-specific effect fields (explosion size, orb radius, etc.), cross-cutting.
@@ -637,7 +637,7 @@ namespace ScalerCore
             _options.Factor, _options.Speed, _options.MassCap,
             _options.SpeedFactor, _options.AnimSpeedMultiplier,
             _options.FootstepPitchMultiplier, _options.BonkImmuneDuration,
-            _options.RestoreSpeed
+            _options.RestoreSpeed, _options.AudioPresence
         };
 
         bool[] PackBools() => new[] {
@@ -661,6 +661,7 @@ namespace ScalerCore
             _options.BonkImmuneDuration    = opts[6];
             // Slots 7+ added later. Length-guarded so old hosts can drive new clients.
             _options.RestoreSpeed          = opts.Length > 7 ? opts[7] : 0f;
+            _options.AudioPresence         = opts.Length > 8 ? opts[8] : 1f;
             _options.PreserveMass          = flags[0];
             _options.InvertedMode          = flags[1];
             _options.SuppressImpactFlash   = flags.Length > 2 && flags[2];
@@ -694,7 +695,7 @@ namespace ScalerCore
             if (!_options.SuppressVoicePitch)
             {
                 var ep = GetComponentInParent<EnemyParent>();
-                _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, f);
+                _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, f, _options.AudioPresence);
             }
             _scaledItemFields = ItemHandler.OnShrinkFields(this, f);
 
@@ -735,6 +736,7 @@ namespace ScalerCore
             if (PhotonNetwork.InRoom && (info.Sender == null || info.Sender != PhotonNetwork.MasterClient)) return;
             var state = HandlerState as PlayerHandler.State;
             state?.PlayerAvatar.voiceChat?.OverridePitchCancel();
+            if (state != null) PlayerHandler.RestoreVoicePresence(state);
         }
 
         // --- client-to-host expand requests ---

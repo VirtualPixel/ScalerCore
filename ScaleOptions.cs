@@ -47,6 +47,14 @@ namespace ScalerCore
         /// <summary>Player footstep sound pitch multiplier while scaled.</summary>
         public float FootstepPitchMultiplier;
 
+        /// <summary>
+        /// How much scaled things sound their size beyond pitch, 0 to 1. Drives the
+        /// volume lift, the reverb lean for the echo, the sound falloff scaling
+        /// (giants carry, tiny things go quiet at range), and the same treatment on
+        /// player voice chat. 0 = pitch only, 1 = the full effect.
+        /// </summary>
+        public float AudioPresence;
+
         /// <summary>Which object types this scaling applies to.</summary>
         public ScaleTargets AllowedTargets;
 
@@ -104,6 +112,7 @@ namespace ScalerCore
             SpeedFactor               = 1.25f,
             AnimSpeedMultiplier       = 0.75f,
             FootstepPitchMultiplier   = 0.55f,
+            AudioPresence             = 1f,
             AllowedTargets            = ScaleTargets.All,
             InvertedMode              = false,
             SuppressValueDropExpand   = false,
@@ -130,6 +139,7 @@ namespace ScalerCore
             SpeedFactor               = 0.75f,
             AnimSpeedMultiplier       = 1.5f,
             FootstepPitchMultiplier   = 1.5f,
+            AudioPresence             = 1f,
             AllowedTargets            = ScaleTargets.All,
             InvertedMode              = false,
             SuppressValueDropExpand   = false,
