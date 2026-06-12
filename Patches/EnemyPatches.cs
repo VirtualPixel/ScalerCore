@@ -184,4 +184,41 @@ namespace ScalerCore.Patches
             return ctrl != null && ctrl.IsScaled && ctrl._options.Factor < 1f;
         }
     }
+
+    /// <summary>
+    /// Beamer melee trigger: OnVision compares player distance against a literal
+    /// 2.5f, so a grown Beamer's body keeps players outside a range it can't
+    /// change and a shrunk one swings from too far. No field to scale; swap the
+    /// constant for one multiplied by the enemy's current factor.
+    /// </summary>
+    [HarmonyPatch(typeof(EnemyBeamer), nameof(EnemyBeamer.OnVision))]
+    internal static class BeamerMeleeRangePatch
+    {
+        static float ScaleMeleeRange(float range, EnemyBeamer beamer)
+        {
+            var ctrl = beamer.enemy?.Rigidbody?.GetComponent<ScaleController>();
+            if (ctrl == null || !ctrl.IsScaled) return range;
+            return range * ctrl._options.Factor;
+        }
+
+        static System.Collections.Generic.IEnumerable<CodeInstruction> Transpiler(
+            System.Collections.Generic.IEnumerable<CodeInstruction> instructions)
+        {
+            var helper = AccessTools.Method(typeof(BeamerMeleeRangePatch), nameof(ScaleMeleeRange));
+            int swapped = 0;
+            foreach (var code in instructions)
+            {
+                yield return code;
+                if (code.opcode == System.Reflection.Emit.OpCodes.Ldc_R4 && code.operand is float v && v == 2.5f)
+                {
+                    yield return new CodeInstruction(System.Reflection.Emit.OpCodes.Ldarg_0);
+                    yield return new CodeInstruction(System.Reflection.Emit.OpCodes.Call, helper);
+                    swapped++;
+                }
+            }
+            if (swapped != 1)
+                Plugin.Log.LogWarning($"[SC] Beamer melee-range transpiler matched {swapped} constants (expected 1). " +
+                    "Scaled Beamers keep the vanilla melee trigger range this session; if this appears after a game update, report it.");
+        }
+    }
 }

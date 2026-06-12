@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ScalerCore.Handlers
@@ -38,6 +39,9 @@ namespace ScalerCore.Handlers
             internal float OriginalRotSpeedChase;
             internal float OriginalRotSpeedIdle;
             internal GrabForce? OriginalGrabForce;
+
+            // Attack/reach decision distances scaled with the body (see ReachFields)
+            internal List<ItemHandler.ScaledField>? ScaledReachFields;
             internal GrabForce? MiniGrabForce;
 
             // Tracking
@@ -153,10 +157,46 @@ namespace ScalerCore.Handlers
         /// <summary>
         /// NavMesh speed/radius + grab force + follow force scaling at shrink time.
         /// </summary>
+        // Enemy AI measures "close enough to attack" against fixed distances while
+        // the body scales, so a grown Loom's huge collider keeps players outside
+        // its vanilla 3m reach check (it can never attack) and a shrunk one slaps
+        // at distances its tiny arms don't cover. These are the per-enemy decision
+        // fields worth scaling; checked against the decompile per game update.
+        static readonly string[] ReachFields =
+        {
+            "handMoveDistance", "slapDistance",   // EnemyShadow (Loom)
+        };
+
+        static void ScaleReachFields(ScaleController ctrl, State state)
+        {
+            if (state.ScaledReachFields != null) return;   // rescale: keep first originals
+            var root = ctrl.GetComponentInParent<EnemyParent>();
+            if (root == null) return;
+            float f = ctrl._options.Factor;
+            var scaled = new List<ItemHandler.ScaledField>();
+            foreach (var mb in root.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                if (mb == null) continue;
+                var type = mb.GetType();
+                foreach (var name in ReachFields)
+                {
+                    var fi = type.GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                    if (fi == null || fi.FieldType != typeof(float)) continue;
+                    float orig = (float)fi.GetValue(mb);
+                    scaled.Add(new ItemHandler.ScaledField { comp = mb, field = fi, original = orig });
+                    fi.SetValue(mb, orig * f);
+                    Plugin.Log.LogDebug($"[SC]   reachField {type.Name}.{name} {orig:F2} -> {orig * f:F2}");
+                }
+            }
+            if (scaled.Count > 0) state.ScaledReachFields = scaled;
+        }
+
         public void OnScale(ScaleController ctrl)
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
+
+            ScaleReachFields(ctrl, state);
 
             if (state.NavAgent != null)
             {
@@ -208,6 +248,9 @@ namespace ScalerCore.Handlers
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
+
+            ItemHandler.OnRestoreFields(state.ScaledReachFields);
+            state.ScaledReachFields = null;
 
             if (state.NavAgent != null)
             {
