@@ -98,7 +98,7 @@ namespace ScalerCore
         public bool IgnoreBonkExpand;
 
         /// <summary>
-        /// If true, external <see cref="ScaleManager.Apply"/> / <see cref="ScaleManager.Restore"/> /
+        /// If true, external <see cref="ScaleManager.Apply(UnityEngine.GameObject, ScaleOptions)"/> / <see cref="ScaleManager.Restore"/> /
         /// <see cref="ScaleManager.RestoreImmediate"/> no-op on this controller. The owning mod uses
         /// <see cref="ScaleManager.ForceApply"/> / <see cref="ScaleManager.ForceRestore"/> to bypass.
         /// </summary>

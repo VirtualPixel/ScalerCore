@@ -14,11 +14,19 @@ If you're building a mod that changes the size of things (shrink rays, growth po
 
 ## Installation
 
-Reference `ScalerCore.dll` in your project. Add a hard dependency in your plugin:
+Reference the API at compile time via NuGet (runtime stays on Thunderstore, so exclude it from your output to avoid double-loading the DLL):
+
+```xml
+<PackageReference Include="ScalerCore" Version="1.0.0" ExcludeAssets="runtime" PrivateAssets="all" />
+```
+
+Then declare the runtime dependency: add `Vippy-ScalerCore-<version>` to your Thunderstore `manifest.json`, and a hard dependency in your plugin:
 
 ```csharp
 [BepInDependency("Vippy.ScalerCore", BepInDependency.DependencyFlags.HardDependency)]
 ```
+
+(Prefer a direct DLL reference? You can still `<Reference>` `ScalerCore.dll` with `Private="false"`. The NuGet package just adds the typed API and IntelliSense.)
 
 ScalerCore automatically attaches `ScaleController` components to all enemies, players, valuables, items, carts, and doors at runtime via Harmony patches. You don't need to add them yourself.
 

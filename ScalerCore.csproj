@@ -9,7 +9,34 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <RootNamespace>ScalerCore</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Not every public member carries an XML doc; the API facade does, which is
+         the point. Silence the missing-doc noise rather than over-document. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+
+  <!-- NuGet package: a compile-time reference to the ScalerCore API for mods that
+       build on it. Runtime distribution stays on Thunderstore; consumers reference
+       this package with ExcludeAssets="runtime" and declare the Thunderstore
+       dependency, so they get IntelliSense without bundling (and double-loading)
+       the DLL. Pack with: dotnet pack -c Release -o ./nupkg -->
+  <PropertyGroup>
+    <PackageId>ScalerCore</PackageId>
+    <Title>ScalerCore</Title>
+    <Description>Scaling library API for R.E.P.O. shrink and grow mods. Handles physics, mass, audio, NavMesh, animation, colliders, and multiplayer sync. Compile-time reference only: ship the runtime through the ScalerCore Thunderstore dependency.</Description>
+    <PackageProjectUrl>https://github.com/VirtualPixel/ScalerCore</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/VirtualPixel/ScalerCore.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageTags>repo;bepinex;harmony;modding;scaling;library</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <PropertyGroup>
     <UserHome Condition="'$(UserHome)' == '' and '$(HOME)' != ''">$(HOME)</UserHome>
