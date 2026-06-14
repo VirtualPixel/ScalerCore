@@ -155,8 +155,16 @@ namespace ScalerCore
             if (PhysGrabber.instance?.playerAvatar == null) return;
             var ctrl = PhysGrabber.instance.playerAvatar.GetComponent<ScaleController>();
             if (ctrl == null || !ctrl.IsScaled) return;
-            // 0.7× keeps overrideGrabDistance above minDistanceFromPlayer (Factor).
-            // Below that threshold the puller is clamped to minDistance anyway.
+            float f = ctrl._options.Factor;
+            if (f > 1f)
+            {
+                // Grown: the vanilla hold distance sits INSIDE the scaled body.
+                // Scale it so the item rides at proportional arm's length.
+                dist *= f;
+                return;
+            }
+            // Shrunken: 0.7× keeps overrideGrabDistance above minDistanceFromPlayer
+            // (Factor). Below that threshold the puller is clamped to minDistance anyway.
             dist *= 0.7f;
         }
     }
@@ -174,7 +182,12 @@ namespace ScalerCore
         {
             var ctrl = PhysGrabber.instance?.playerAvatar?.GetComponent<ScaleController>();
             if (ctrl == null || !ctrl.IsScaled) return;
-            pos = 0f;
+            float f = ctrl._options.Factor;
+            // Grown: the flat world-unit offset is proportionally too small for a
+            // giant; scale it with the body. Shrunken: VisionTransform is already
+            // scaled to the small eye height, so cancel the offset entirely.
+            if (f > 1f) pos *= f;
+            else pos = 0f;
         }
     }
 

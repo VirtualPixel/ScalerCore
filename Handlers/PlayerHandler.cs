@@ -157,6 +157,18 @@ namespace ScalerCore.Handlers
         }
 
         /// <summary>
+        /// Pitch curve for player VOICES, distinct from AudioPitchHelper's SFX
+        /// curve. AudioSource pitch below ~0.8 plays speech tape-slow and words
+        /// stop landing, so the grow side is gentle with an intelligibility
+        /// floor (a growl can go deep, a callout can't). Shrink side keeps the
+        /// chipmunk, speech sped up stays understandable.
+        /// </summary>
+        internal static float VoicePitchMult(float factor) =>
+            factor >= 1f
+                ? Mathf.Clamp(1f - (factor - 1f) * 0.15f, 0.8f, 1f)
+                : Mathf.Clamp(1f + (1f - factor) * 0.5f, 1f, 2f);
+
+        /// <summary>
         /// Voice pitch override + local player effects at shrink time.
         /// Called from DispatchShrink() and RPC_Shrink() via handler interface.
         /// </summary>
@@ -171,7 +183,7 @@ namespace ScalerCore.Handlers
                 if (state.PlayerAvatar.voiceChat != null)
                 {
                     float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
-                    float pitchMult = Mathf.Clamp(1f + (1f - factor) * 0.5f, 0.35f, 2f);
+                    float pitchMult = VoicePitchMult(factor);
                     state.PlayerAvatar.voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 9999f);
 
                     // Same presence treatment the entity sounds get: a giant's voice
@@ -185,7 +197,9 @@ namespace ScalerCore.Handlers
                         float presence = Mathf.Clamp01(ctrl._options.AudioPresence);
                         state.OriginalVoiceReverb  = voiceSrc.reverbZoneMix;
                         state.OriginalVoiceMaxDist = voiceSrc.maxDistance;
-                        voiceSrc.reverbZoneMix = Mathf.Min(1.1f, state.OriginalVoiceReverb * (1f + 0.4f * presence));
+                        // Same light reverb touch as AudioPitchHelper: past 1.0
+                        // the wet path amplifies and speech drowns in the room
+                        voiceSrc.reverbZoneMix = Mathf.Min(1f, state.OriginalVoiceReverb * (1f + 0.15f * presence));
                         voiceSrc.maxDistance   = state.OriginalVoiceMaxDist * Mathf.Lerp(1f, ctrl._options.Factor, presence);
                         state.VoicePresenceApplied = true;
                     }
@@ -274,7 +288,7 @@ namespace ScalerCore.Handlers
                 if (!ctrl._options.SuppressVoicePitch && state.PlayerAvatar.voiceChat != null)
                 {
                     float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
-                    float pitchMult = Mathf.Clamp(1f + (1f - factor) * 0.5f, 0.35f, 2f);
+                    float pitchMult = VoicePitchMult(factor);
                     state.PlayerAvatar.voiceChat.overridePitchMultiplierTarget = pitchMult;
                     state.PlayerAvatar.voiceChat.overridePitchTimer = 0.2f;
                     state.PlayerAvatar.voiceChat.overridePitchIsActive = true;

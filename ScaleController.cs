@@ -250,7 +250,7 @@ namespace ScalerCore
                 float speed = _currentAnimSpeed * OriginalScale.magnitude;
                 _animScale = Vector3.MoveTowards(_animScale, _target, speed * Time.deltaTime);
                 if (!HandlerOwnsScale)
-                    _t.localScale = _animScale;
+                    _t.localScale = ClampPhysical(_animScale);
 
                 if (_animScale == _target)
                 {
@@ -267,10 +267,61 @@ namespace ScalerCore
             // Skip when handler owns scaling (e.g. doors scale children individually).
             if (!isPlayer && !HandlerOwnsScale && IsScaled && !_transitioning && !inInventory)
             {
-                if (_t.localScale != _target)
-                    Plugin.Log.LogDebug($"[SC] LATE_FORCE  {_displayName}  was={_t.localScale}  forcing={_target}");
-                _t.localScale = _target;
+                Vector3 physTarget = ClampPhysical(_target);
+                if (_t.localScale != physTarget)
+                    Plugin.Log.LogDebug($"[SC] LATE_FORCE  {_displayName}  was={_t.localScale}  forcing={physTarget}");
+                _t.localScale = physTarget;
             }
+        }
+
+        // --- enemy grow split: physical ceiling ---
+        // Visuals (and reach, audio, mass) keep climbing to Factor; the collider
+        // scale and nav agent radius stop at EnemyPhysicalFactorCap so a giant
+        // still fits through the doorways the navmesh was baked for. Grow-only:
+        // never engages while shrinking, never for non-enemies.
+        internal bool PhysicallyCapped =>
+            Handler is EnemyHandler
+            && _options.EnemyPhysicalFactorCap > 0f
+            && _options.Factor > 1f
+            && _options.Factor > _options.EnemyPhysicalFactorCap;
+
+        internal float PhysicalFactor =>
+            PhysicallyCapped ? Mathf.Max(1f, _options.EnemyPhysicalFactorCap) : _options.Factor;
+
+        Vector3 ClampPhysical(Vector3 intended)
+        {
+            if (!PhysicallyCapped || OriginalScale.x <= 0f) return intended;
+            Vector3 cap = OriginalScale * Mathf.Max(1f, _options.EnemyPhysicalFactorCap);
+            return new Vector3(
+                Mathf.Min(intended.x, cap.x),
+                Mathf.Min(intended.y, cap.y),
+                Mathf.Min(intended.z, cap.z));
+        }
+
+        // PhysGrabObject keeps its own massOriginal and ResetMass() writes it
+        // back to rb.mass whenever an alter-mass episode ends, silently undoing
+        // the scaled mass mid-session (why some grown valuables stopped feeling
+        // heavy while others never hit that path and stayed heavy). Scale
+        // massOriginal alongside rb.mass so the game's own resets land on the
+        // scaled value; the vanilla number goes back at expand.
+        float _pgoVanillaMassOriginal;
+
+        void ScalePgoMassOriginal(float f)
+        {
+            if (_physGrabObject == null || _isItem || _options.PreserveMass) return;
+            if (_pgoVanillaMassOriginal == 0f)
+                _pgoVanillaMassOriginal = _physGrabObject.massOriginal > 0f
+                    ? _physGrabObject.massOriginal
+                    : _originalMass;
+            if (_pgoVanillaMassOriginal <= 0f) return;
+            _physGrabObject.massOriginal = Mathf.Clamp(_pgoVanillaMassOriginal * f, 0.5f, _options.MassCap);
+        }
+
+        void RestorePgoMassOriginal()
+        {
+            if (_physGrabObject != null && _pgoVanillaMassOriginal > 0f)
+                _physGrabObject.massOriginal = _pgoVanillaMassOriginal;
+            _pgoVanillaMassOriginal = 0f;
         }
 
         // Enemies despawn via SetActive(false), the same GO is re-enabled on respawn.
@@ -292,6 +343,7 @@ namespace ScalerCore
             Scaled.Remove(this);
 
             if (_rb != null) _rb.mass = _originalMass;
+            RestorePgoMassOriginal();
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
 
             Handler?.OnRestore(this, isBonk: false);
@@ -326,6 +378,16 @@ namespace ScalerCore
             }
 
             Plugin.Log.LogDebug($"[SC] DispatchShrink ENTER  {_displayName}  instanceID={GetInstanceID()}  IsScaled={IsScaled}  currentScale={_t.localScale}  GO={gameObject.name}");
+            // Hitch tracing: the whole apply runs in one frame, so if it ever
+            // costs real milliseconds the player sees a freeze-frame. Warn with
+            // the object name so slow targets can be reported and broken down
+            var swApply = System.Diagnostics.Stopwatch.StartNew();
+            void WarnIfSlow(string path)
+            {
+                swApply.Stop();
+                if (swApply.ElapsedMilliseconds >= 10)
+                    Plugin.Log.LogWarning($"[SC] slow scale apply ({path}): {swApply.ElapsedMilliseconds}ms on {_displayName}");
+            }
             if (IsScaled)
             {
                 // Same factor → toggle (restore). Different factor → rescale in place.
@@ -352,8 +414,25 @@ namespace ScalerCore
                     _roomVolumeCheck.currentSize = _originalRoomVolumeSize * rf;
                 if (_rb != null && !_isItem && !_options.PreserveMass)
                     _rb.mass = Mathf.Clamp(_originalMass * rf, 0.5f, _options.MassCap);
+                ScalePgoMassOriginal(rf);
+
+                // A rescale changes factor mid-session, so the per-session
+                // treatments the fresh path applies below must follow it too.
+                // Without these, a grown object re-shot as shrunken keeps its
+                // giant audio treatment and its disabled-when-shrinking grab
+                // point never updates, so it can't be picked up
+                SetForceGrabPoint(rf >= 1f);
+                if (!_options.SuppressVoicePitch)
+                {
+                    var ep = GetComponentInParent<EnemyParent>();
+                    _audioPitch.ApplyPitch(ep != null ? (Component)ep : this, rf, _options.AudioPresence);
+                }
+                ItemHandler.OnRestoreFields(_scaledItemFields);
+                _scaledItemFields = ItemHandler.OnShrinkFields(this, rf);
+
                 if (_networkPV != null && PhotonNetwork.InRoom)
                     _networkPV.RPC(nameof(RPC_Shrink), RpcTarget.Others, newTarget, PackOpts(), PackBools());
+                WarnIfSlow("rescale");
                 return;
             }
             // Guard against bare `new ScaleOptions()` (all zeroes), fall back to defaults for critical fields.
@@ -424,6 +503,7 @@ namespace ScalerCore
                         ? $"  pgo.massOrig={_physGrabObject.massOriginal:F3}  pgo.timerAlter={_physGrabObject.timerAlterMass:F2}"
                         : ""));
             }
+            ScalePgoMassOriginal(f);
 
             // Handler-specific shrink logic (enemy nav/grab, player voice/camera, etc.)
             Handler?.OnScale(this);
@@ -445,6 +525,7 @@ namespace ScalerCore
 
             // Shrink the map icon to match.
             ScaleMapIcon(f);
+            WarnIfSlow("fresh");
         }
 
         public void DispatchExpand()
@@ -468,6 +549,7 @@ namespace ScalerCore
             PlayCameraShake();
 
             if (_rb != null) _rb.mass = _originalMass;
+            RestorePgoMassOriginal();
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
 
             Handler?.OnRestore(this, isBonk: false);
@@ -509,6 +591,7 @@ namespace ScalerCore
             PlayCameraShake();
 
             if (_rb != null) _rb.mass = _originalMass;
+            RestorePgoMassOriginal();
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
 
             Handler?.OnRestore(this, isBonk: true);
@@ -523,7 +606,12 @@ namespace ScalerCore
         void ApplyScale(Vector3 target)
         {
             _target        = target;
-            _animScale     = _t.localScale; // snapshot current scale for animation
+            // Snapshot current scale for animation. Under a physical cap the
+            // transform sits BELOW the intended scale and _animScale already
+            // tracks the intended value; restarting from the capped transform
+            // would snap the visuals down at the start of the next transition
+            if (!PhysicallyCapped)
+                _animScale = _t.localScale;
             _transitioning = true;
             if (Handler is PlayerHandler)
             {
@@ -637,7 +725,8 @@ namespace ScalerCore
             _options.Factor, _options.Speed, _options.MassCap,
             _options.SpeedFactor, _options.AnimSpeedMultiplier,
             _options.FootstepPitchMultiplier, _options.BonkImmuneDuration,
-            _options.RestoreSpeed, _options.AudioPresence
+            _options.RestoreSpeed, _options.AudioPresence,
+            _options.EnemyPhysicalFactorCap
         };
 
         bool[] PackBools() => new[] {
@@ -662,6 +751,7 @@ namespace ScalerCore
             // Slots 7+ added later. Length-guarded so old hosts can drive new clients.
             _options.RestoreSpeed          = opts.Length > 7 ? opts[7] : 0f;
             _options.AudioPresence         = opts.Length > 8 ? opts[8] : 1f;
+            _options.EnemyPhysicalFactorCap = opts.Length > 9 ? opts[9] : 0f;
             _options.PreserveMass          = flags[0];
             _options.InvertedMode          = flags[1];
             _options.SuppressImpactFlash   = flags.Length > 2 && flags[2];
@@ -675,6 +765,7 @@ namespace ScalerCore
             _currentAnimSpeed = _options.Speed;
             Scaled.Add(this);
             if (_rb != null && !_isItem && !_options.PreserveMass) _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, _options.MassCap);
+            ScalePgoMassOriginal(f);
             if (_rb != null && Handler is ValuableHandler)
             {
                 float wantRaw = _originalMass * f;
@@ -715,6 +806,7 @@ namespace ScalerCore
             IsScaled = false;
             Scaled.Remove(this);
             if (_rb != null) _rb.mass = _originalMass;
+            RestorePgoMassOriginal();
             if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
             _currentAnimSpeed = ResolveExpandSpeed();
             ApplyScale(OriginalScale);

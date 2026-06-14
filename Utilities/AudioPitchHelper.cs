@@ -19,8 +19,11 @@ namespace ScalerCore.Utilities
         // and falloff scales with the factor so a giant carries further while a
         // tiny one gets sneaky-quiet at range. All of it rides one knob,
         // ScaleOptions.AudioPresence: these are the strengths at presence 1.
+        // Reverb is a light touch: past ~1.0 ReverbMix amplifies the wet path
+        // and everything big turns echoey-but-muffled, the diffuse tail buries
+        // the dry transient that actually reads as "big"
         const float GrowVolumeBoost = 0.25f;
-        const float GrowReverbBoost = 0.4f;
+        const float GrowReverbBoost = 0.15f;
 
         static float VolumeMult(float presence) => 1f + GrowVolumeBoost * Mathf.Clamp01(presence);
         static float ReverbMult(float presence) => 1f + GrowReverbBoost * Mathf.Clamp01(presence);
@@ -40,18 +43,32 @@ namespace ScalerCore.Utilities
         /// Sound is a plain serializable class (not a Component), so GetComponentsInChildren
         /// won't find it, we walk fields via reflection instead.
         /// </summary>
+        // The full field walk per component is the expensive part and the result
+        // only depends on the TYPE, so it's cached: after the first encounter of
+        // each component type the scan is a dictionary hit and (usually) an
+        // empty-array skip. Keeps the apply-frame cost flat instead of paying
+        // reflection across the whole hierarchy on every scale.
+        static readonly Dictionary<System.Type, FieldInfo[]> _soundFieldCache = new();
+
         internal static Sound[] GatherSounds(Component root)
         {
+            var seen = new HashSet<Sound>();
             var found = new List<Sound>();
             foreach (var mb in root.GetComponentsInChildren<MonoBehaviour>(includeInactive: true))
             {
                 if (mb == null) continue;
-                foreach (var f in mb.GetType()
-                                    .GetFields(BindingFlags.Public | BindingFlags.NonPublic
-                                               | BindingFlags.Instance)
-                                    .Where(f => f.FieldType == typeof(Sound)))
+                var type = mb.GetType();
+                if (!_soundFieldCache.TryGetValue(type, out var fields))
                 {
-                    if (f.GetValue(mb) is Sound s && !found.Contains(s))
+                    fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic
+                                            | BindingFlags.Instance)
+                                 .Where(f => f.FieldType == typeof(Sound))
+                                 .ToArray();
+                    _soundFieldCache[type] = fields;
+                }
+                foreach (var f in fields)
+                {
+                    if (f.GetValue(mb) is Sound s && seen.Add(s))
                         found.Add(s);
                 }
             }
@@ -59,10 +76,12 @@ namespace ScalerCore.Utilities
         }
 
         static float PitchMult(float factor) =>
-            // Linear around 1: chipmunk when small, deep when big. Clamped so
-            // extreme growth factors bottom out at a usable rumble instead of
-            // running the formula negative (factor 3+ would invert the audio).
-            Mathf.Clamp(1f + (1f - factor) * 0.5f, 0.35f, 2f);
+            // Chipmunk when small, deep when big. The grow side is shallower
+            // and floors at 0.5: deep reads as "big" well before half pitch,
+            // and below that the highs are gone and everything turns to mud
+            factor >= 1f
+                ? Mathf.Max(0.5f, 1f - (factor - 1f) * 0.35f)
+                : Mathf.Clamp(1f + (1f - factor) * 0.5f, 1f, 2f);
 
         // Pitch and presence for a transient effect object (a spawned explosion).
         // No capture, no restore: the instance and its sounds die with the effect.
@@ -78,13 +97,19 @@ namespace ScalerCore.Utilities
                 if (grown)
                 {
                     s.Volume = Mathf.Min(1f, s.Volume * VolumeMult(presence));
-                    s.ReverbMix = Mathf.Min(1.1f, s.ReverbMix * ReverbMult(presence));
+                    s.ReverbMix = Mathf.Min(1f, s.ReverbMix * ReverbMult(presence));
                 }
             }
         }
 
         internal void ApplyPitch(Component searchRoot, float factor, float presence)
         {
+            // Rescale safety: a second apply while a capture is live (grow then
+            // re-shot as shrink) would record the already-treated values as the
+            // originals, and the old treatment would survive every restore
+            if (_pitchedSounds != null) RestorePitch();
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             float mult = PitchMult(factor);
             bool grown = factor > 1f;
             _pitchedSounds           = GatherSounds(searchRoot);
@@ -112,7 +137,7 @@ namespace ScalerCore.Utilities
                 {
                     s.Volume = Mathf.Min(1f, _soundOriginalVolume[i] * VolumeMult(presence));
                     s.LoopVolume = Mathf.Min(1f, _soundOriginalLoopVolume[i] * VolumeMult(presence));
-                    s.ReverbMix = Mathf.Min(1.1f, _soundOriginalReverb[i] * ReverbMult(presence));
+                    s.ReverbMix = Mathf.Min(1f, _soundOriginalReverb[i] * ReverbMult(presence));
                 }
 
                 // Immediately apply to any currently-playing loop source so it doesn't
@@ -122,6 +147,9 @@ namespace ScalerCore.Utilities
             }
 
             Plugin.Log.LogDebug($"[SC]   sound treatment x{mult:F2} pitch{(grown ? ", grown presence" : "")} on {_pitchedSounds.Length} Sound objects under {searchRoot.gameObject.name}");
+            sw.Stop();
+            if (sw.ElapsedMilliseconds >= 5)
+                Plugin.Log.LogWarning($"[SC] slow sound treatment: {sw.ElapsedMilliseconds}ms for {_pitchedSounds.Length} sounds under {searchRoot.gameObject.name}");
         }
 
         /// <summary>

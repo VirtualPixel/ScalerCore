@@ -42,6 +42,9 @@ namespace ScalerCore.Handlers
 
             // Attack/reach decision distances scaled with the body (see ReachFields)
             internal List<ItemHandler.ScaledField>? ScaledReachFields;
+            // Reach-envelope marker transforms scaled with the body (see ReachAreaFields)
+            internal Transform[]? ReachAreaTransforms;
+            internal Vector3[]? ReachAreaOriginalScales;
             internal GrabForce? MiniGrabForce;
 
             // Tracking
@@ -191,12 +194,56 @@ namespace ScalerCore.Handlers
             if (scaled.Count > 0) state.ScaledReachFields = scaled;
         }
 
+        // Reach ENVELOPES, not distances: EnemyShadow clamps its wrists to a box
+        // built from a marker transform's localScale (UpdateHandPositionTo), and
+        // localScale never inherits an ancestor scale. Without scaling these, a
+        // grown Loom's hands stay penned in the vanilla envelope, so they can
+        // never get within HandsInPositionToSlap's tolerance of a player that
+        // the scaled handMoveDistance told her to attack, she reaches and reaches
+        // and the slap never fires.
+        static readonly string[] ReachAreaFields =
+        {
+            "handArea", "handAreaUnder", "handAreaUnderSlapReady",   // EnemyShadow (Loom)
+        };
+
+        static void ScaleReachAreas(ScaleController ctrl, State state)
+        {
+            if (state.ReachAreaTransforms != null) return;   // rescale: keep first originals
+            var root = ctrl.GetComponentInParent<EnemyParent>();
+            if (root == null) return;
+            float f = ctrl._options.Factor;
+            var areas = new List<Transform>();
+            var originals = new List<Vector3>();
+            foreach (var mb in root.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                if (mb == null) continue;
+                var type = mb.GetType();
+                foreach (var name in ReachAreaFields)
+                {
+                    var fi = type.GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                    if (fi == null || fi.FieldType != typeof(Transform)) continue;
+                    var t = fi.GetValue(mb) as Transform;
+                    if (t == null) continue;
+                    areas.Add(t);
+                    originals.Add(t.localScale);
+                    t.localScale = t.localScale * f;
+                    Plugin.Log.LogDebug($"[SC]   reachArea {type.Name}.{name} {originals[originals.Count - 1]} -> {t.localScale}");
+                }
+            }
+            if (areas.Count > 0)
+            {
+                state.ReachAreaTransforms = areas.ToArray();
+                state.ReachAreaOriginalScales = originals.ToArray();
+            }
+        }
+
         public void OnScale(ScaleController ctrl)
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
 
             ScaleReachFields(ctrl, state);
+            ScaleReachAreas(ctrl, state);
 
             if (state.NavAgent != null)
             {
@@ -207,7 +254,9 @@ namespace ScalerCore.Handlers
                 {
                     agent.speed  *= ctrl._options.SpeedFactor;
                     state.OriginalAgentRadius = agent.radius;
-                    agent.radius *= ctrl._options.Factor;
+                    // Physical factor, not Factor: under the grow cap the body
+                    // (and so the space the agent needs) stops at the cap
+                    agent.radius *= ctrl.PhysicalFactor;
                     Plugin.Log.LogDebug($"[SC]   navSpeed {state.OriginalDefaultSpeed:F2} → {state.NavAgent.DefaultSpeed:F2}  radius {state.OriginalAgentRadius:F2} → {agent.radius:F2}");
                 }
             }
@@ -251,6 +300,17 @@ namespace ScalerCore.Handlers
 
             ItemHandler.OnRestoreFields(state.ScaledReachFields);
             state.ScaledReachFields = null;
+
+            if (state.ReachAreaTransforms != null)
+            {
+                for (int i = 0; i < state.ReachAreaTransforms.Length; i++)
+                {
+                    var t = state.ReachAreaTransforms[i];
+                    if (t != null) t.localScale = state.ReachAreaOriginalScales![i];
+                }
+                state.ReachAreaTransforms = null;
+                state.ReachAreaOriginalScales = null;
+            }
 
             if (state.NavAgent != null)
             {

@@ -2,7 +2,7 @@
 
 A scaling library for [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/) modders. Handles the hard parts of scaling game objects -- physics, audio, animation, colliders, NavMesh, multiplayer sync -- so you don't have to.
 
-> **v0.6.2: RepoXR (VR) support.** A shrunken player in VR now sees and reaches at the right scale: the headset viewpoint and hand rig shrink with them, and room-scale walking covers proportionally less ground. RepoXR is auto-detected by reflection. It stays an optional integration, never a dependency, and non-VR play is untouched.
+> **v1.0.0: the API is stable.** Growth is a first-class direction now, not just shrinking: enemies, players, and props grow as well as shrink, with the audio, reach, mass, and physics that sells the size. Grown enemies cap their physical footprint so they still fit the level, voices pitch with an intelligibility floor, and grown players hold items at arm's length. The public surface (`ScaleManager`, `ScaleOptions`, `IScaleHandler`) is stable for the 1.x line.
 
 If you're building a mod that changes the size of things (shrink rays, growth potions, whatever), ScalerCore gives you a clean API and takes care of the edge cases.
 
@@ -178,6 +178,8 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as
 | `SpeedFactor` | `0.75` | Enemy NavMesh speed multiplier |
 | `AnimSpeedMultiplier` | `1.5` | Player animation speed while scaled |
 | `FootstepPitchMultiplier` | `1.5` | Player footstep pitch while scaled |
+| `AudioPresence` | `1.0` | Grow-side audio presence: 0 = pitch only, 1 = full (volume lift, light reverb, falloff scales with size). Rides the sync RPC. |
+| `EnemyPhysicalFactorCap` | `0` | Grow-only, enemies only: colliders and nav radius stop at this factor while visuals/reach/audio keep climbing to `Factor`, so a giant still fits the level. 0 disables. |
 | `AllowedTargets` | `All` | Flags: `Players`, `Enemies`, `Items`, `Valuables`, `All` |
 | `InvertedMode` | `false` | If true, scaled state is the default and bonk temporarily grows back |
 | `SuppressValueDropExpand` | `false` | If true, valuables won't expand when damaged while scaled (for cart mods) |

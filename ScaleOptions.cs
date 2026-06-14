@@ -55,6 +55,15 @@ namespace ScalerCore
         /// </summary>
         public float AudioPresence;
 
+        /// <summary>
+        /// Grow-only, enemies only: the body stops growing PHYSICALLY (colliders,
+        /// nav agent radius) at this factor while the visuals keep climbing to
+        /// <see cref="Factor"/>, so a giant still fits through the doorways the
+        /// navmesh was baked for. Reach and attacks track the visual size.
+        /// 0 disables the cap. Ignored for shrinking and for non-enemies.
+        /// </summary>
+        public float EnemyPhysicalFactorCap;
+
         /// <summary>Which object types this scaling applies to.</summary>
         public ScaleTargets AllowedTargets;
 
@@ -113,6 +122,7 @@ namespace ScalerCore
             AnimSpeedMultiplier       = 0.75f,
             FootstepPitchMultiplier   = 0.55f,
             AudioPresence             = 1f,
+            EnemyPhysicalFactorCap    = 1.4f,
             AllowedTargets            = ScaleTargets.All,
             InvertedMode              = false,
             SuppressValueDropExpand   = false,
@@ -140,6 +150,7 @@ namespace ScalerCore
             AnimSpeedMultiplier       = 1.5f,
             FootstepPitchMultiplier   = 1.5f,
             AudioPresence             = 1f,
+            EnemyPhysicalFactorCap    = 0f,
             AllowedTargets            = ScaleTargets.All,
             InvertedMode              = false,
             SuppressValueDropExpand   = false,
