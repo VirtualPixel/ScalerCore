@@ -64,11 +64,17 @@ namespace ScalerCore
         internal Rigidbody? _rb;
         internal float      _originalMass;
 
-        // RoomVolumeCheck: extraction zone detection uses currentSize for OverlapBox.
-        // We scale it on shrink and restore on expand so shrunken items don't register
-        // as being in the extraction zone when they physically aren't.
+        // RoomVolumeCheck: extraction zone detection feeds Physics.OverlapBox a box at
+        //   center = transform.position + transform.rotation * CheckPosition
+        //   size   = currentSize
+        // We scale BOTH on shrink and restore on expand so shrunken items don't register
+        // as being in the extraction zone when they physically aren't. Scaling currentSize
+        // alone shrinks the box but leaves it offset by the full CheckPosition: the probe
+        // drifts off the shrunken body and can overhang the zone. CheckPosition has to
+        // scale by the same factor to stay centered on the body.
         RoomVolumeCheck? _roomVolumeCheck;
         Vector3 _originalRoomVolumeSize;
+        Vector3 _originalCheckPosition;
         bool       _isItem;       // ItemAttributes present, timer restore only, no bonk expand
         internal ItemEquippable? _itemEquippable; // cached, null for non-items
 
@@ -131,7 +137,11 @@ namespace ScalerCore
                 _physGrabObject = GetComponent<PhysGrabObject>();
 
             _roomVolumeCheck = GetComponent<RoomVolumeCheck>();
-            if (_roomVolumeCheck != null) _originalRoomVolumeSize = _roomVolumeCheck.currentSize;
+            if (_roomVolumeCheck != null)
+            {
+                _originalRoomVolumeSize = _roomVolumeCheck.currentSize;
+                _originalCheckPosition = _roomVolumeCheck.CheckPosition;
+            }
 
             // Readable name: use EnemyParent.name for enemies (GO is just "Rigidbody" otherwise)
             var epForName = GetComponentInParent<EnemyParent>();
@@ -344,7 +354,11 @@ namespace ScalerCore
 
             if (_rb != null) _rb.mass = _originalMass;
             RestorePgoMassOriginal();
-            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+            if (_roomVolumeCheck != null)
+            {
+                _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+                _roomVolumeCheck.CheckPosition = _originalCheckPosition;
+            }
 
             Handler?.OnRestore(this, isBonk: false);
             _audioPitch.RestorePitch();
@@ -411,7 +425,10 @@ namespace ScalerCore
                 _currentAnimSpeed = _options.Speed;
                 ApplyScale(newTarget);
                 if (_roomVolumeCheck != null)
+                {
                     _roomVolumeCheck.currentSize = _originalRoomVolumeSize * rf;
+                    _roomVolumeCheck.CheckPosition = _originalCheckPosition * rf;
+                }
                 if (_rb != null && !_isItem && !_options.PreserveMass)
                     _rb.mass = Mathf.Clamp(_originalMass * rf, 0.5f, _options.MassCap);
                 ScalePgoMassOriginal(rf);
@@ -461,9 +478,12 @@ namespace ScalerCore
             // Only disable ForceGrabPoint when shrinking, enlarged items don't need it.
             if (f < 1f) SetForceGrabPoint(false);
 
-            // Scale extraction detection box
+            // Scale extraction detection box (size and the offset to its center)
             if (_roomVolumeCheck != null)
+            {
                 _roomVolumeCheck.currentSize = _originalRoomVolumeSize * f;
+                _roomVolumeCheck.CheckPosition = _originalCheckPosition * f;
+            }
 
             if (_networkPV != null && PhotonNetwork.InRoom)
             {
@@ -550,7 +570,11 @@ namespace ScalerCore
 
             if (_rb != null) _rb.mass = _originalMass;
             RestorePgoMassOriginal();
-            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+            if (_roomVolumeCheck != null)
+            {
+                _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+                _roomVolumeCheck.CheckPosition = _originalCheckPosition;
+            }
 
             Handler?.OnRestore(this, isBonk: false);
 
@@ -592,7 +616,11 @@ namespace ScalerCore
 
             if (_rb != null) _rb.mass = _originalMass;
             RestorePgoMassOriginal();
-            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+            if (_roomVolumeCheck != null)
+            {
+                _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+                _roomVolumeCheck.CheckPosition = _originalCheckPosition;
+            }
 
             Handler?.OnRestore(this, isBonk: true);
 
@@ -779,7 +807,11 @@ namespace ScalerCore
                         ? $"  pgo.massOrig={_physGrabObject.massOriginal:F3}"
                         : ""));
             }
-            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize * f;
+            if (_roomVolumeCheck != null)
+            {
+                _roomVolumeCheck.currentSize = _originalRoomVolumeSize * f;
+                _roomVolumeCheck.CheckPosition = _originalCheckPosition * f;
+            }
             ApplyScale(target);
             if (f < 1f) SetForceGrabPoint(false);
             PlayImpactEffect();
@@ -807,7 +839,11 @@ namespace ScalerCore
             Scaled.Remove(this);
             if (_rb != null) _rb.mass = _originalMass;
             RestorePgoMassOriginal();
-            if (_roomVolumeCheck != null) _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+            if (_roomVolumeCheck != null)
+            {
+                _roomVolumeCheck.currentSize = _originalRoomVolumeSize;
+                _roomVolumeCheck.CheckPosition = _originalCheckPosition;
+            }
             _currentAnimSpeed = ResolveExpandSpeed();
             ApplyScale(OriginalScale);
             SetForceGrabPoint(true);

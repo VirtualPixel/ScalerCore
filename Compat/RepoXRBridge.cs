@@ -48,7 +48,7 @@ namespace ScalerCore.Compat
         {
             get
             {
-                if (_failed || !Plugin.RepoXRSupport.Value) return false;
+                if (_failed) return false;
                 if (!Probe()) return false;
                 try
                 {

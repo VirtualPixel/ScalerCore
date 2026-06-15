@@ -1,8 +1,7 @@
 using BepInEx;
-using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
-using UnityEngine;
+using ScalerCore.Utilities;
 
 namespace ScalerCore
 {
@@ -12,30 +11,31 @@ namespace ScalerCore
         internal static Harmony Harmony = null!;
         internal static ManualLogSource Log = null!;
 
-        // When RepoXR is installed and VR is active, scale the headset viewpoint and hand
-        // rig so a shrunken player is actually small in VR. Off leaves RepoXR's camera
-        // untouched (the player still shrinks on everyone else's screen).
-        internal static ConfigEntry<bool> RepoXRSupport = null!;
-
         // Mass-drift hunting instrumentation. Heavy (per-physics-call logs, a
         // stack walk in the patches), so it only arms when the dev sets
         // SCALERCORE_DIAG=1 in the environment. Ships silent, costs nothing.
         internal static readonly bool DiagMass =
             System.Environment.GetEnvironmentVariable("SCALERCORE_DIAG") == "1";
 
+        // Extraction-volume debug overlay. A dev tool, not a player setting, so it
+        // never appears in the config UI. Arms two ways, both invisible to normal
+        // users: the SCALERCORE_DEBUG=1 env var (good for CLI launches), or a
+        // "scalercore_debug" sentinel file in BepInEx/config (good for GUI launches
+        // through Gale, where env vars don't reach the game). Delete the file to
+        // disable. A shipped profile has neither, so it stays dormant.
+        internal static readonly bool DebugDraw =
+            System.Environment.GetEnvironmentVariable("SCALERCORE_DEBUG") == "1"
+            || System.IO.File.Exists(System.IO.Path.Combine(Paths.ConfigPath, "scalercore_debug"));
+
         void Awake()
         {
             Log = Logger;
-
-            RepoXRSupport = Config.Bind(
-                "Compatibility", "RepoXR VR support", true,
-                "Shrink the VR headset viewpoint and hand rig to match player size when RepoXR is installed. Disable if VR scaling misbehaves.");
-
 
             Harmony = new Harmony("Vippy.ScalerCore");
             Harmony.PatchAll();
 
             gameObject.AddComponent<AprilFools.MapCollapse>();
+            if (DebugDraw) gameObject.AddComponent<ExtractionVolumeDebug>();
         }
     }
 }

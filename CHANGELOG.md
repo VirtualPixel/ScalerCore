@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1
+
+### Fixed
+- Shrunken valuables no longer read as inside the extraction point when they physically aren't. The detection probe (`RoomVolumeCheck`) is a box built from a size (`currentSize`) and an offset to its center (`CheckPosition`); ScalerCore scaled the size on shrink but left the offset at full length, so the probe drifted off the shrunken body and could still overhang the extraction zone. The offset now scales with the factor alongside the size, captured once and put back on expand.
+
+### Internal
+- Dropped the `Compatibility / RepoXR VR support` config toggle. The bridge already no-ops unless RepoXR is installed and the player is in VR, both found by reflection at runtime, so the toggle was redundant gating. Back to a pure library with no user-facing config.
+
 ## 1.0.0
 
 ### New
