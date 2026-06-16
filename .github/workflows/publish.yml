@@ -1,0 +1,60 @@
+name: Publish to NuGet
+
+# The package can't be built here: it compiles against the game's Assembly-CSharp
+# and Photon/Unity DLLs from a local Steam install, which aren't redistributable.
+# So this workflow publishes a .nupkg you built locally and attached to a Release.
+#
+# Flow:
+#   1. dotnet pack -c Release -o ./nupkg   (on your machine, game installed)
+#   2. Create a GitHub Release for the version tag, attach ScalerCore.<ver>.nupkg
+#   3. Publishing this Release runs the job below and pushes via OIDC.
+#
+# Trusted publishing means no API key secret: NuGet/login exchanges the workflow's
+# OIDC token for a short-lived key, so the policy must name THIS file (publish.yml).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag whose .nupkg asset to publish (e.g. 1.0.1)
+        required: true
+
+permissions:
+  id-token: write   # required for OIDC trusted publishing
+  contents: read    # required for gh release download
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download .nupkg from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+        run: |
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern '*.nupkg' \
+            --dir ./nupkg
+          ls -l ./nupkg
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: NuGet trusted-publishing login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          # Must match the Package Owner on the nuget.org trusted-publishing policy.
+          user: Vippy
+
+      - name: Push to nuget.org
+        run: >
+          dotnet nuget push ./nupkg/*.nupkg
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
