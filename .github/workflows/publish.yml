@@ -50,7 +50,7 @@ jobs:
         uses: NuGet/login@v1
         with:
           # Must match the Package Owner on the nuget.org trusted-publishing policy.
-          user: Vippy
+          user: vippy
 
       - name: Push to nuget.org
         run: >
