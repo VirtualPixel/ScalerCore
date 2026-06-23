@@ -88,6 +88,10 @@ namespace ScalerCore
         internal Vector3    _target;
         internal Vector3    _animScale;  // tracks intended scale independently of _t.localScale
         internal bool       _transitioning;
+        // Edge tracker for the per-frame scale re-apply log: true while the game is actively
+        // fighting our scale, so LATE_FORCE logs once when the fight starts instead of every
+        // frame it continues.
+        bool                _wasForcing;
         // Animation speed for the current transition. Set on each dispatch; lets shrink and
         // expand use different speeds via RestoreSpeed.
         internal float      _currentAnimSpeed = ScaleOptions.Default.Speed;
@@ -278,10 +282,16 @@ namespace ScalerCore
             if (!isPlayer && !HandlerOwnsScale && IsScaled && !_transitioning && !inInventory)
             {
                 Vector3 physTarget = ClampPhysical(_target);
-                if (_t.localScale != physTarget)
+                bool mismatch = _t.localScale != physTarget;
+                // Log only the rising edge: the game code that resets the scale runs every
+                // frame, so logging every mismatch flooded the log. One line when the fight
+                // starts is enough to spot it.
+                if (mismatch && !_wasForcing)
                     Plugin.Log.LogDebug($"[SC] LATE_FORCE  {_displayName}  was={_t.localScale}  forcing={physTarget}");
+                _wasForcing = mismatch;
                 _t.localScale = physTarget;
             }
+            else _wasForcing = false;
         }
 
         // --- enemy grow split: physical ceiling ---
@@ -446,6 +456,15 @@ namespace ScalerCore
                 }
                 ItemHandler.OnRestoreFields(_scaledItemFields);
                 _scaledItemFields = ItemHandler.OnShrinkFields(this, rf);
+
+                // The fresh shrink path runs Handler.OnScale; the rescale path skipped
+                // it, so a player's one-shot local effects (camera height, FOV, collision,
+                // voice pitch) stayed at the old factor while the body animated to the new
+                // size. Re-run them here. ApplyLocalPlayerShrinkEffects sees the factor
+                // changed and restores-then-reapplies. Player only: other handlers drive
+                // their visuals per-frame and need no one-shot rescale.
+                if (Handler is Handlers.PlayerHandler)
+                    Handler.OnScale(this);
 
                 if (_networkPV != null && PhotonNetwork.InRoom)
                     _networkPV.RPC(nameof(RPC_Shrink), RpcTarget.Others, newTarget, PackOpts(), PackBools());

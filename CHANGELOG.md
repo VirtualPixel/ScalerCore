@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.2
+
+### Fixed
+- A grown player re-shot as shrunken without expanding between (switching the gun from grow to shrink and firing again) kept the giant's camera height, FOV, and collision while the body and its shadow animated down to the small size, so the view sat far above a tiny Semibot. The rescale path now re-runs the player's one-shot local effects, and the apply restores the captured originals before re-scaling when the factor changes, so the camera follows the body in either direction. Toggling back through normal size always worked; this covers the in-place switch.
+- Shrunken players no longer over-bob the head. The body-size stride correction was applying to shrink as well as growth, and with the shrink animation multiplier running faster than the movement slowdown it drove the camera bob to roughly twice the vanilla rate. The correction is growth-only again: a shrunken player keeps the vanilla coupling, where the smaller body's slower movement already eases the bob. Growth still gets the long heavy stomps.
+- The first scale of a session no longer freeze-frames for ~200ms. The RepoXR (VR) compatibility probe resolved its types with a name lookup that, when RepoXR is absent, scans every type in every loaded assembly before giving up. It ran lazily on the first scale and stalled that frame. The probe now checks whether a RepoXR assembly is even loaded first (a cheap enumeration) and skips the full scan when it isn't, and it runs once at plugin load so any residual cost lands during startup instead of mid-game. VR detection is unchanged when RepoXR is installed.
+
 ## 1.0.1
 
 ### Fixed

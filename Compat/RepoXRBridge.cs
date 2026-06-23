@@ -68,6 +68,15 @@ namespace ScalerCore.Compat
             _probe = 0;
             try
             {
+                // AccessTools.TypeByName scans every type in every loaded assembly before
+                // it gives up, ~200ms when the type is absent, and it landed on the first
+                // in-game scale as a freeze-frame. RepoXR is absent in the common case, so
+                // check for its assembly by name first (a cheap enumeration) and skip the
+                // full type scan when it isn't loaded. When RepoXR is present TypeByName
+                // finds it early, so VR detection stays fast and unchanged.
+                if (!RepoXRAssemblyLoaded())
+                    return false;
+
                 var session = AccessTools.TypeByName("RepoXR.Managers.VRSession");
                 var player  = AccessTools.TypeByName("RepoXR.Player.VRPlayer");
                 var rig     = AccessTools.TypeByName("RepoXR.Player.VRRig");
@@ -98,6 +107,28 @@ namespace ScalerCore.Compat
                 return false;
             }
         }
+
+        /// <summary>
+        /// Cheap presence test: is any RepoXR assembly loaded? Enumerating loaded assembly
+        /// names is fast; it spares the full type-by-name scan when RepoXR isn't installed.
+        /// </summary>
+        static bool RepoXRAssemblyLoaded()
+        {
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var name = asm.GetName().Name;
+                if (name != null && name.IndexOf("RepoXR", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Resolve RepoXR presence once, off the hot path. Called at plugin load so the
+        /// one-time probe (and any type resolution when RepoXR is present) happens during
+        /// startup instead of on the first scale. Idempotent: Probe caches its outcome.
+        /// </summary>
+        internal static void Warm() => Probe();
 
         /// <summary>Shrink the VR viewpoint and hand rig to the given factor. Local player only.</summary>
         internal static void ApplyViewpointShrink(float factor)

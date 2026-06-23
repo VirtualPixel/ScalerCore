@@ -34,6 +34,10 @@ namespace ScalerCore
             Harmony = new Harmony("Vippy.ScalerCore");
             Harmony.PatchAll();
 
+            // Probe for RepoXR now, while the game is still loading, so the one-time
+            // assembly check happens here instead of stalling the first in-game scale.
+            Compat.RepoXRBridge.Warm();
+
             gameObject.AddComponent<AprilFools.MapCollapse>();
             if (DebugDraw) gameObject.AddComponent<ExtractionVolumeDebug>();
         }

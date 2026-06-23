@@ -99,6 +99,11 @@ namespace ScalerCore.Handlers
             // already-scaled singleton values as originals and compounding to factor².
             internal bool LocalEffectsApplied;
 
+            // Factor the local effects were last applied at. A rescale to a different
+            // factor (grow then shrink without expanding between) restores and re-applies;
+            // the same factor stays a no-op so we never compound.
+            internal float AppliedFactor;
+
             // True when this shrink took the RepoXR (VR) path: the vanilla camera blocks
             // were skipped in favour of scaling the VR rig. Restore reads this so it skips
             // exactly the same blocks regardless of the config state at restore time.
@@ -479,9 +484,19 @@ namespace ScalerCore.Handlers
         {
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
-            if (state.LocalEffectsApplied) return;
 
             float f = ctrl._options.Factor;
+            if (state.LocalEffectsApplied)
+            {
+                // Already applied at the same factor: genuine no-op (idempotent re-entry).
+                if (Mathf.Approximately(state.AppliedFactor, f)) return;
+                // Re-shot at a different factor (grow then shrink in place). The captured
+                // originals are the true unscaled values, so restore the singletons to them
+                // first, then fall through and re-scale by the new factor. Without this the
+                // view stays at the old factor's camera height/FOV over a body that already
+                // animated to the new size, the giant-camera-over-tiny-shadow desync.
+                RestoreLocalPlayerShrinkEffects(ctrl);
+            }
 
             // RepoXR (VR) drives its own head-tracked camera, so the vanilla camera and FOV
             // nudges below never reach a VR player. Take the bridge path instead, which
@@ -540,11 +555,14 @@ namespace ScalerCore.Handlers
             float speedMult = Mathf.Lerp(1f, f, 0.5f);
             PlayerController.instance?.OverrideSpeed(speedMult, 9999f);
             // CameraBob advances its cycle by overrideSpeedMultiplier, and footsteps
-            // fire when the cycle wraps, so the speed change dragged the bob AND the
-            // step rate with it: giants stepped faster, tiny players slower. Strides
-            // should follow body size instead, so the cadence lands on the animation
-            // multiplier: long heavy stomps when big, quick patter when small.
-            if (CameraBob.Instance != null)
+            // fire when the cycle wraps, so the giant's speed boost made the bob AND
+            // the steps faster. Big things take longer strides: counter the coupling
+            // so the cadence lands at the animation multiplier instead. Growth only.
+            // Applying the same correction to shrink (AnimSpeedMultiplier 1.5x while
+            // speedMult is ~0.7) drove the bob ~2x past the vanilla coupling, which
+            // read as the head whipping around. Shrink keeps the vanilla coupling:
+            // overrideSpeedMultiplier already slows the bob with the smaller body.
+            if (f > 1f && CameraBob.Instance != null)
             {
                 state.OriginalBobUpSpeed   = CameraBob.Instance.bobUpLerpSpeed;
                 state.OriginalBobSideSpeed = CameraBob.Instance.bobSideLerpSpeed;
@@ -606,6 +624,7 @@ namespace ScalerCore.Handlers
                 Compat.RepoXRBridge.ApplyViewpointShrink(f);
 
             state.LocalEffectsApplied = true;
+            state.AppliedFactor = f;
         }
 
         /// <summary>
