@@ -14,7 +14,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
         internal sealed class BirthdayBoyState
         {
             internal EnemyBirthdayBoy BirthdayBoy = null!;
-            internal float FootOffset; // pivot-to-floor distance at full scale (world Y)
+            internal float FootOffset; // pivot-to-feet distance at full scale (world Y)
         }
 
         public object? Setup(ScaleController ctrl, EnemyHandler.State state, EnemyParent ep)
