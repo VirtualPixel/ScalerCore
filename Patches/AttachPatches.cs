@@ -3,7 +3,12 @@ using Photon.Pun;
 
 namespace ScalerCore
 {
-    [HarmonyPatch(typeof(PhysGrabObject), "Start")]
+    // Awake, not Start: a networked valuable can be spawned and shrunk by the host in the
+    // same network pass it is instantiated on a client, and the shrink RPC dispatches before
+    // Unity runs Start. Attaching (and registering the RPC cache, in ScaleController.Awake)
+    // during the instantiate-time Awake means the controller is present and routable when
+    // that RPC lands, instead of a frame too late.
+    [HarmonyPatch(typeof(PhysGrabObject), "Awake")]
     internal static class AttachToValuablePatch
     {
         static void Postfix(PhysGrabObject __instance)

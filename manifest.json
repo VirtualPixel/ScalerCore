@@ -1,6 +1,6 @@
 {
   "name": "ScalerCore",
-  "version_number": "1.0.2",
+  "version_number": "1.0.3",
   "website_url": "https://github.com/VirtualPixel/ScalerCore",
   "description": "Scaling library for shrink and grow mods in R.E.P.O. Handles physics, audio, NavMesh, animation, colliders, and sync. Enemies, players, valuables, items, carts, doors. Vehicles stay drivable and pocketable when scaled. API for size mods.",
   "dependencies": ["BepInEx-BepInExPack-5.4.2305"]

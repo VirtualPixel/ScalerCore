@@ -3,22 +3,26 @@ using UnityEngine;
 namespace ScalerCore.Handlers.EnemyVisuals
 {
     /// <summary>
-    /// Visual handler for enemies that sink into the ground when shrunk.
-    /// Applies Y compensation to AnimTarget.localPosition based on the gap
-    /// between Rigidbody and AnimTarget local Y positions.
+    /// Visual handler for enemies whose mesh pivot sits above their feet, so scaling drops
+    /// the mesh through the floor.
     ///
-    /// The problem: when the RB's colliders shrink, physics settles it lower.
-    /// But the game maintains AnimTarget.localPosition.y at its original value,
-    /// so the mesh drops below floor level.
-    ///
-    /// The fix: adjust AnimTarget.localPosition.y so the gap between RB and
-    /// AnimTarget scales proportionally with the shrink ratio.
+    /// Shrinking and growing need different compensation. Shrinking shrinks the colliders
+    /// too, so physics settles the body lower and we track the rb-to-mesh gap. Growing here
+    /// holds the collider near vanilla (grow caps), so the body doesn't move and we instead
+    /// lift the mesh by how far scaling its own geometry would sink the feet.
     /// </summary>
     internal class SinkerVisualHandler : IEnemyVisualHandler
     {
+        // Floating enemies (e.g. the floater) hover instead of standing, so they should not
+        // be grounded when grown, just scaled. They still want shrink compensation.
+        private readonly bool _groundOnGrow;
+
+        public SinkerVisualHandler(bool groundOnGrow = true) => _groundOnGrow = groundOnGrow;
+
         internal sealed class SinkerState
         {
-            internal float OriginalGap; // rb.localPos.y - animTarget.localPos.y at full scale
+            internal float OriginalGap;  // rb.localPos.y - animTarget.localPos.y, for shrinking
+            internal float FootOffset;   // pivot-to-feet distance, for growing
         }
 
         public object? Setup(ScaleController ctrl, EnemyHandler.State state, EnemyParent ep)
@@ -26,7 +30,8 @@ namespace ScalerCore.Handlers.EnemyVisuals
             if (state.AnimTarget == null) return null;
             return new SinkerState
             {
-                OriginalGap = state.RbOriginalLocalPos.y - state.AnimOriginalLocalPos.y
+                OriginalGap = state.RbOriginalLocalPos.y - state.AnimOriginalLocalPos.y,
+                FootOffset = VisualGrounding.MeasureFootOffset(state.AnimTarget),
             };
         }
 
@@ -34,20 +39,25 @@ namespace ScalerCore.Handlers.EnemyVisuals
         {
             if (state.AnimTarget == null) return;
 
-            // Scale the mesh
             state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
 
-            // BtHead (shouldn't be present on sinkers, but safe to include)
             if (state.BtHead != null)
                 state.BtHead.transform.localScale = state.BtHeadOriginalScale * ratio;
 
-            // Y compensation
-            if (visualState is SinkerState sinker)
+            if (visualState is not SinkerState sinker) return;
+
+            if (ratio >= 1f)
             {
+                // Growing: lift the mesh to keep its feet on the floor (skip for floaters).
+                if (_groundOnGrow)
+                    VisualGrounding.Apply(state, sinker.FootOffset, ratio);
+            }
+            else
+            {
+                // Shrinking: track the rb-to-mesh gap as physics settles the smaller body.
                 float expectedGap = sinker.OriginalGap * ratio;
                 float actualGap = ctrl._t.localPosition.y - state.AnimTarget.localPosition.y;
                 float correction = expectedGap - actualGap;
-
                 if (Mathf.Abs(correction) > 0.001f)
                 {
                     var pos = state.AnimTarget.localPosition;

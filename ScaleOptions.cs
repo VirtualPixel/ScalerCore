@@ -64,6 +64,36 @@ namespace ScalerCore
         /// </summary>
         public float EnemyPhysicalFactorCap;
 
+        /// <summary>
+        /// Grow-only, enemies only: caps how WIDE the physical body and nav agent get
+        /// (the X/Z axes) at this factor, while the body's HEIGHT tracks the full
+        /// <see cref="Factor"/> so the mesh stays grounded. The visual still scales
+        /// uniformly to <see cref="Factor"/>, so a giant looks proportional but keeps a
+        /// vanilla-width footprint that fits doorways and can path to its target.
+        /// Takes precedence over <see cref="EnemyPhysicalFactorCap"/>. 0 disables it.
+        /// Ignored for shrinking and for non-enemies.
+        /// </summary>
+        public float EnemyWidthFactorCap;
+
+        /// <summary>
+        /// Grow-only, enemies only: caps the NAV AGENT radius growth at this factor,
+        /// independent of how wide the body gets. Lets the visible body be wider
+        /// (<see cref="EnemyWidthFactorCap"/>) while the pathfinding footprint stays
+        /// small enough to fit the doorways the navmesh was baked for. 0 falls back to
+        /// the physical/width factor. Ignored for shrinking and for non-enemies.
+        /// </summary>
+        public float EnemyNavRadiusFactorCap;
+
+        /// <summary>
+        /// Grow-only, enemies only: caps how TALL the physical body gets (the collider's
+        /// Y axis) at this factor, while width and depth scale to <see cref="Factor"/>.
+        /// The mesh still scales proportionally, so the monster looks its full size but
+        /// its collider stays short enough to fit under ceilings and stand upright instead
+        /// of being shoved over. 1 holds the collider at vanilla height. 0 disables it.
+        /// Ignored for shrinking and for non-enemies.
+        /// </summary>
+        public float EnemyHeightFactorCap;
+
         /// <summary>Which object types this scaling applies to.</summary>
         public ScaleTargets AllowedTargets;
 
@@ -123,6 +153,9 @@ namespace ScalerCore
             FootstepPitchMultiplier   = 0.55f,
             AudioPresence             = 1f,
             EnemyPhysicalFactorCap    = 1.4f,
+            EnemyWidthFactorCap       = 0f,
+            EnemyNavRadiusFactorCap   = 0f,
+            EnemyHeightFactorCap      = 0f,
             AllowedTargets            = ScaleTargets.All,
             InvertedMode              = false,
             SuppressValueDropExpand   = false,
@@ -151,6 +184,9 @@ namespace ScalerCore
             FootstepPitchMultiplier   = 1.5f,
             AudioPresence             = 1f,
             EnemyPhysicalFactorCap    = 0f,
+            EnemyWidthFactorCap       = 0f,
+            EnemyNavRadiusFactorCap   = 0f,
+            EnemyHeightFactorCap      = 0f,
             AllowedTargets            = ScaleTargets.All,
             InvertedMode              = false,
             SuppressValueDropExpand   = false,

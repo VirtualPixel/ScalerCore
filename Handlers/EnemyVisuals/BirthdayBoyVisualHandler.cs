@@ -14,6 +14,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
         internal sealed class BirthdayBoyState
         {
             internal EnemyBirthdayBoy BirthdayBoy = null!;
+            internal float FootOffset; // pivot-to-feet distance at full scale (world Y)
         }
 
         public object? Setup(ScaleController ctrl, EnemyHandler.State state, EnemyParent ep)
@@ -26,7 +27,11 @@ namespace ScalerCore.Handlers.EnemyVisuals
             }
 
             Plugin.Log.LogDebug($"[SC]   BirthdayBoy: cached, maxBalloons={bb.maxBalloons}");
-            return new BirthdayBoyState { BirthdayBoy = bb };
+            return new BirthdayBoyState
+            {
+                BirthdayBoy = bb,
+                FootOffset = VisualGrounding.MeasureFootOffset(state.AnimTarget),
+            };
         }
 
         public void OnLateUpdate(ScaleController ctrl, EnemyHandler.State state, object? visualState, float ratio)
@@ -34,6 +39,10 @@ namespace ScalerCore.Handlers.EnemyVisuals
             // Scale the enemy mesh like DefaultVisualHandler.
             if (state.AnimTarget != null)
                 state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
+
+            // Keep the mesh feet on the floor.
+            if (visualState is BirthdayBoyState bb)
+                VisualGrounding.Apply(state, bb.FootOffset, ratio);
 
             if (state.BtHead != null)
                 state.BtHead.transform.localScale = state.BtHeadOriginalScale * ratio;

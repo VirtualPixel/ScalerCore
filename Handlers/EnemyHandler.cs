@@ -31,6 +31,10 @@ namespace ScalerCore.Handlers
             // Rigidbody original local position (for mesh Y compensation)
             internal Vector3 RbOriginalLocalPos;
 
+            // Vision origin held at its vanilla offset from the body while grown.
+            internal Transform? VisionTransform;
+            internal Vector3 VisionLocalOffset;
+
             // Saved originals
             internal float OriginalDefaultSpeed;
             internal float OriginalAgentRadius;
@@ -148,6 +152,17 @@ namespace ScalerCore.Handlers
 
             state.RbOriginalLocalPos = ctrl._t.localPosition;
 
+            // Keep a grown enemy's vision origin at its vanilla offset from the body, so a
+            // tall enemy whose mesh head clips the ceiling can still see out (the vision
+            // raycasts/overlap test all start at VisionTransform.position).
+            var vision = ep.GetComponentInChildren<EnemyVision>();
+            if (vision != null && vision.VisionTransform != null)
+            {
+                state.VisionTransform = vision.VisionTransform;
+                state.VisionLocalOffset =
+                    Quaternion.Inverse(ctrl._t.rotation) * (vision.VisionTransform.position - ctrl._t.position);
+            }
+
             // Resolve per-enemy visual handler by internal name.
             string enemyName = EnemyVisualRegistry.ExtractEnemyName(ep);
             state.VisualHandler = EnemyVisualRegistry.Resolve(enemyName);
@@ -254,9 +269,10 @@ namespace ScalerCore.Handlers
                 {
                     agent.speed  *= ctrl._options.SpeedFactor;
                     state.OriginalAgentRadius = agent.radius;
-                    // Physical factor, not Factor: under the grow cap the body
-                    // (and so the space the agent needs) stops at the cap
-                    agent.radius *= ctrl.PhysicalFactor;
+                    // Nav factor: the pathing footprint can be held narrower than the
+                    // body (EnemyNavRadiusFactorCap) so a wide enemy still fits doorways;
+                    // otherwise it tracks the physical/width factor.
+                    agent.radius *= ctrl.NavRadiusFactor;
                     Plugin.Log.LogDebug($"[SC]   navSpeed {state.OriginalDefaultSpeed:F2} → {state.NavAgent.DefaultSpeed:F2}  radius {state.OriginalAgentRadius:F2} → {agent.radius:F2}");
                 }
             }
@@ -384,6 +400,12 @@ namespace ScalerCore.Handlers
 
             if (state.VisualHandler != null)
                 state.VisualHandler.OnLateUpdate(ctrl, state, state.VisualState, ratio);
+
+            // Hold the vision origin at its vanilla position when grown (so the eye point
+            // doesn't ride up into a ceiling). Grow-only; shrinking leaves it alone.
+            if (state.VisionTransform != null && ctrl._options.Factor > 1f)
+                state.VisionTransform.position =
+                    ctrl._t.position + ctrl._t.rotation * state.VisionLocalOffset;
         }
 
         /// <summary>

@@ -78,13 +78,14 @@ namespace ScalerCore.Handlers
             _registered = true;
 
             var sinker      = new EnemyVisuals.SinkerVisualHandler();
+            var floater     = new EnemyVisuals.SinkerVisualHandler(groundOnGrow: false);
             var heartHug    = new EnemyVisuals.HeartHuggerVisualHandler();
             var loom        = new EnemyVisuals.LoomVisualHandler();
             var tricycle    = new EnemyVisuals.TricycleVisualHandler();
             var birthdayBoy = new EnemyVisuals.BirthdayBoyVisualHandler();
 
             _overrides["Tumbler"]      = sinker;
-            _overrides["Floater"]      = sinker;
+            _overrides["Floater"]      = floater;
             _overrides["Runner"]       = sinker;
             _overrides["Slow Walker"]  = sinker;
             _overrides["Elsa"]         = sinker;

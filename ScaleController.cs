@@ -106,6 +106,14 @@ namespace ScalerCore
         // sits on EnemyParent, not EnemyRigidbody. GetComponentInParent finds it correctly.
         internal PhotonView? _networkPV;
 
+        // Set once EnsureInitialized has run (rb, handler, room-volume capture resolved).
+        bool _inited;
+
+        // A shrink RPC that arrived before this controller finished initializing (late-spawned
+        // networked object: the host's RPC lands in the same pass the object instantiates, before
+        // our Start). Stashed by RPC_Shrink, replayed at the end of Start.
+        (Vector3 target, float[] opts, bool[] flags)? _pendingShrink;
+
         // Sound pitch control, instance manages per-entity pitch state.
         internal AudioPitchHelper _audioPitch = new();
 
@@ -115,11 +123,78 @@ namespace ScalerCore
             OriginalScale = transform.localScale;
             _target       = OriginalScale;
             _animScale    = OriginalScale;
+
+            // Register with PUN's RPC routing cache now, at attach time, so a shrink RPC that
+            // arrives in the same network pass the object instantiates can route to this freshly
+            // AddComponent'd controller. Full init still waits for Start (see EnsureInitialized);
+            // a premature RPC is stashed by RPC_Shrink and replayed once Start has run.
+            EnsureNetworkPV();
         }
 
         void Start()
         {
-            // Resolve handler via registry. Done in Start so game Awake methods have run.
+            EnsureInitialized();
+
+            string kind = Handler != null ? Handler.GetType().Name.Replace("Handler", "").ToLower() : "base";
+
+            // Duplicate check: warn if another ScaleController already registered under the same EnemyParent.
+            var epCheck = GetComponentInParent<EnemyParent>();
+            if (epCheck != null)
+            {
+                int existing = 0;
+                foreach (var sc in epCheck.GetComponentsInChildren<ScaleController>())
+                    if (sc != this) existing++;
+                if (existing > 0)
+                    Plugin.Log.LogWarning($"[SC] *** DUPLICATE: {_displayName} already has {existing} other ScaleController(s) under same EnemyParent ***");
+            }
+
+            // Log handler-specific info for enemies.
+            var enemyState = HandlerState as EnemyHandler.State;
+            Plugin.Log.LogDebug($"[SC] Registered {_displayName} ({kind})" +
+                $"  scale={OriginalScale}" +
+                $"  mass={(_rb != null ? _rb.mass.ToString("F2") : "none")}" +
+                $"  animTarget={(enemyState?.AnimTarget != null ? enemyState.AnimTarget.gameObject.name : "NONE")}" +
+                $"  navAgent={(enemyState?.NavAgent != null ? "yes" : "no")}");
+
+            // Apply a shrink RPC that arrived before init finished (late-spawned networked
+            // object: the host's RPC landed in the same pass the object instantiated). It was
+            // stashed rather than applied half-initialized; now rb, handler, and the room-volume
+            // capture are set, so it can apply correctly.
+            if (_pendingShrink is { } ps)
+            {
+                _pendingShrink = null;
+                Plugin.Log.LogDebug($"[SC] applying shrink that arrived before Start on {_displayName}");
+                ApplyRemoteShrink(ps.target, ps.opts, ps.flags);
+            }
+
+            // Voice pitch in menu lobby: apply or cancel depending on challenge mode.
+            // Deferred because remote PlayerVoiceChat components may not exist yet at Start.
+            if (Handler is PlayerHandler && SemiFunc.RunIsLobbyMenu())
+                StartCoroutine(LobbyPitchDeferred());
+
+            // Challenge mode: auto-shrink players during actual runs.
+            // Deferred via coroutine because voiceChat and Photon aren't ready at Start time.
+            // Only skip the menu lobby, the truck lobby counts as a run.
+            if (ChallengeMode && Handler is PlayerHandler
+                && !SemiFunc.RunIsLobbyMenu())
+            {
+                StartCoroutine(ChallengeModeDeferred());
+            }
+        }
+
+        // Idempotent one-time init: handler resolution, rigidbody/mass capture, room-volume
+        // capture, name/type flags, and RPC PhotonView caching. Normally runs at the top of
+        // Start (after the game's own Awake methods), but the host can be asked to scale a
+        // late-spawned object before this controller's Start runs (the consuming mod's
+        // PhysGrabObject.Start postfix fires in the same frame the controller is attached), so
+        // DispatchShrink/DispatchExpand call this first to guarantee the state they read exists.
+        void EnsureInitialized()
+        {
+            if (_inited) return;
+            _inited = true;
+
+            // Resolve handler via registry. Safe here: the game's Awake methods have run, and on
+            // the host dispatch path this object's own Start (the postfix that drives us) has too.
             Handler = ScaleHandlerRegistry.Resolve(gameObject);
             Handler?.Setup(this);
 
@@ -153,47 +228,11 @@ namespace ScalerCore
             _isItem       = GetComponent<ItemAttributes>() != null;
             _itemEquippable = GetComponent<ItemEquippable>();
 
-            string kind = Handler != null ? Handler.GetType().Name.Replace("Handler", "").ToLower() : "base";
-
-            // Duplicate check: warn if another ScaleController already registered under the same EnemyParent.
-            var epCheck = GetComponentInParent<EnemyParent>();
-            if (epCheck != null)
-            {
-                int existing = 0;
-                foreach (var sc in epCheck.GetComponentsInChildren<ScaleController>())
-                    if (sc != this) existing++;
-                if (existing > 0)
-                    Plugin.Log.LogWarning($"[SC] *** DUPLICATE: {_displayName} already has {existing} other ScaleController(s) under same EnemyParent ***");
-            }
-
             // Cache the PhotonView used for RPCs. For players the PhotonView is on the same GO;
             // for enemies it's on EnemyParent (GetComponent misses it). GetComponentInParent
             // finds both. RefreshRpcMonoBehaviourCache makes PUN2 include this ScaleController
             // (just AddComponent'd, so not in the original cache) when routing incoming RPCs.
-            _networkPV = photonView ?? GetComponentInParent<PhotonView>();
-            _networkPV?.RefreshRpcMonoBehaviourCache();
-
-            // Log handler-specific info for enemies.
-            var enemyState = HandlerState as EnemyHandler.State;
-            Plugin.Log.LogDebug($"[SC] Registered {_displayName} ({kind})" +
-                $"  scale={OriginalScale}" +
-                $"  mass={(_rb != null ? _rb.mass.ToString("F2") : "none")}" +
-                $"  animTarget={(enemyState?.AnimTarget != null ? enemyState.AnimTarget.gameObject.name : "NONE")}" +
-                $"  navAgent={(enemyState?.NavAgent != null ? "yes" : "no")}");
-
-            // Voice pitch in menu lobby: apply or cancel depending on challenge mode.
-            // Deferred because remote PlayerVoiceChat components may not exist yet at Start.
-            if (Handler is PlayerHandler && SemiFunc.RunIsLobbyMenu())
-                StartCoroutine(LobbyPitchDeferred());
-
-            // Challenge mode: auto-shrink players during actual runs.
-            // Deferred via coroutine because voiceChat and Photon aren't ready at Start time.
-            // Only skip the menu lobby, the truck lobby counts as a run.
-            if (ChallengeMode && Handler is PlayerHandler
-                && !SemiFunc.RunIsLobbyMenu())
-            {
-                StartCoroutine(ChallengeModeDeferred());
-            }
+            EnsureNetworkPV();
         }
 
         void Update()
@@ -299,23 +338,69 @@ namespace ScalerCore
         // scale and nav agent radius stop at EnemyPhysicalFactorCap so a giant
         // still fits through the doorways the navmesh was baked for. Grow-only:
         // never engages while shrinking, never for non-enemies.
-        internal bool PhysicallyCapped =>
+        // Width-only cap: body height tracks Factor (grounded), X/Z hold at the cap so
+        // the footprint stays door-sized. Takes precedence over the uniform cap.
+        internal bool WidthCapped =>
+            Handler is EnemyHandler
+            && _options.EnemyWidthFactorCap > 0f
+            && _options.Factor > 1f
+            && _options.Factor > _options.EnemyWidthFactorCap;
+
+        internal bool UniformCapped =>
             Handler is EnemyHandler
             && _options.EnemyPhysicalFactorCap > 0f
             && _options.Factor > 1f
             && _options.Factor > _options.EnemyPhysicalFactorCap;
 
+        // Height-only cap: Y holds at the cap (e.g. vanilla height) while X/Z grow to
+        // Factor, so a giant gets bulkier instead of taller and still fits under ceilings.
+        internal bool HeightCapped =>
+            Handler is EnemyHandler
+            && _options.EnemyHeightFactorCap > 0f
+            && _options.Factor > 1f
+            && _options.Factor > _options.EnemyHeightFactorCap;
+
+        internal bool PhysicallyCapped => WidthCapped || UniformCapped || HeightCapped;
+
         internal float PhysicalFactor =>
-            PhysicallyCapped ? Mathf.Max(1f, _options.EnemyPhysicalFactorCap) : _options.Factor;
+            WidthCapped ? Mathf.Max(1f, _options.EnemyWidthFactorCap)
+            : UniformCapped ? Mathf.Max(1f, _options.EnemyPhysicalFactorCap)
+            : _options.Factor;
+
+        // Nav agent radius can be held narrower than the body so a wide enemy still
+        // paths through doorways. Falls back to PhysicalFactor when not set.
+        internal float NavRadiusFactor =>
+            Handler is EnemyHandler
+            && _options.EnemyNavRadiusFactorCap > 0f
+            && _options.Factor > 1f
+            && _options.Factor > _options.EnemyNavRadiusFactorCap
+                ? Mathf.Max(1f, _options.EnemyNavRadiusFactorCap)
+                : PhysicalFactor;
 
         Vector3 ClampPhysical(Vector3 intended)
         {
-            if (!PhysicallyCapped || OriginalScale.x <= 0f) return intended;
-            Vector3 cap = OriginalScale * Mathf.Max(1f, _options.EnemyPhysicalFactorCap);
-            return new Vector3(
-                Mathf.Min(intended.x, cap.x),
-                Mathf.Min(intended.y, cap.y),
-                Mathf.Min(intended.z, cap.z));
+            if (OriginalScale.x <= 0f) return intended;
+            if (UniformCapped)
+            {
+                Vector3 cap = OriginalScale * Mathf.Max(1f, _options.EnemyPhysicalFactorCap);
+                return new Vector3(
+                    Mathf.Min(intended.x, cap.x),
+                    Mathf.Min(intended.y, cap.y),
+                    Mathf.Min(intended.z, cap.z));
+            }
+            // Width and height caps are independent: each holds its axis at the cap while
+            // the others grow to Factor. A vanilla height cap keeps the body fitting under
+            // ceilings; a width cap keeps the footprint door-sized.
+            Vector3 r = intended;
+            if (WidthCapped)
+            {
+                float w = Mathf.Max(1f, _options.EnemyWidthFactorCap);
+                r.x = OriginalScale.x * w;
+                r.z = OriginalScale.z * w;
+            }
+            if (HeightCapped)
+                r.y = OriginalScale.y * Mathf.Max(1f, _options.EnemyHeightFactorCap);
+            return r;
         }
 
         // PhysGrabObject keeps its own massOriginal and ResetMass() writes it
@@ -392,9 +477,24 @@ namespace ScalerCore
 
         // --- host calls ---
 
+        // Resolves the PhotonView used for RPCs and registers this freshly-added
+        // component with PUN's RPC routing cache. Cheap and idempotent: resolves once.
+        // Start does this, but a late-spawned object can be told to shrink in the same
+        // frame it is attached (the host's PhysGrabObject.Start mutator runs after the
+        // AddComponent patch but before this component's own Start), so _networkPV would
+        // still be null and the shrink RPC would be skipped. Resolving on demand at the
+        // RPC sites closes that race.
+        void EnsureNetworkPV()
+        {
+            if (_networkPV != null) return;
+            _networkPV = photonView ?? GetComponentInParent<PhotonView>();
+            _networkPV?.RefreshRpcMonoBehaviourCache();
+        }
+
         public void DispatchShrink(ScaleOptions options)
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            EnsureInitialized();
             if (!ScaleManager.AllowDeadHeads && GetComponent<PlayerDeathHead>() != null)
             {
                 Plugin.Log.LogDebug($"[SC] DispatchShrink ignored: {_displayName} is a dead Semibot head and ScaleManager.AllowDeadHeads is off");
@@ -571,6 +671,7 @@ namespace ScalerCore
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             if (!IsScaled) return;
+            EnsureInitialized();
             IsScaled = false;
             Scaled.Remove(this);
 
@@ -787,6 +888,21 @@ namespace ScalerCore
         {
             // Scale state only ever flows host -> clients; drop spoofed sends.
             if (PhotonNetwork.InRoom && (info.Sender == null || info.Sender != PhotonNetwork.MasterClient)) return;
+
+            // Routing reaches us as soon as the component is attached (Awake registers the RPC
+            // cache), but applying needs the init that only finishes in Start (rb, handler,
+            // room-volume capture). A late-spawned object can be shrunk in the same network pass
+            // it instantiates, before our Start runs, so stash the request and let Start replay it.
+            if (!_inited)
+            {
+                _pendingShrink = (target, opts, flags);
+                return;
+            }
+            ApplyRemoteShrink(target, opts, flags);
+        }
+
+        void ApplyRemoteShrink(Vector3 target, float[] opts, bool[] flags)
+        {
             Plugin.Log.LogDebug($"[SC] RPC_Shrink RECV  {_displayName}  target={target}  factor={opts[0]}  speed={opts[1]}  handler={Handler?.GetType().Name ?? "null"}");
             _options.Factor                = opts[0];
             _options.Speed                 = opts[1];
@@ -854,6 +970,13 @@ namespace ScalerCore
         void RPC_Expand(PhotonMessageInfo info = default)
         {
             if (PhotonNetwork.InRoom && (info.Sender == null || info.Sender != PhotonNetwork.MasterClient)) return;
+            // Arrived before init: nothing is scaled yet, and it cancels any shrink we stashed
+            // for Start to replay. Drop both and bail; there's no state to restore.
+            if (!_inited)
+            {
+                _pendingShrink = null;
+                return;
+            }
             IsScaled = false;
             Scaled.Remove(this);
             if (_rb != null) _rb.mass = _originalMass;

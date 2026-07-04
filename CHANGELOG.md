@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.3
+
+### Fixed
+- Valuables that spawn after the level has started and get scaled in the same frame no longer stay full-size on other clients. A late-spawned networked object instantiates and gets its shrink RPC from the host in the same network pass, but the `ScaleController` was attached and registered in `Start`, a frame later. So on the host the shrink broadcast was skipped against a not-yet-resolved PhotonView, and on clients the RPC arrived before the component existed and PUN logged `RPC method 'RPC_Shrink' not found`. Objects present at level load took a later path, well after the controller was up, so they synced fine and only late spawns broke. The controller now attaches during the object's `Awake` and registers its RPC routing there, so the host resolves the view in time to broadcast and clients can receive. A shrink RPC that still lands before the controller finishes initializing is held and applied once `Start` has run, so it lands with mass and the extraction-detection box scaled rather than half-applied. The host's own late-spawn scaling got the same init guarantee, so its mass and extraction-box scaling no longer depend on `Start` having run first.
+
 ## 1.0.2
 
 ### Fixed
