@@ -380,26 +380,26 @@ namespace ScalerCore
         Vector3 ClampPhysical(Vector3 intended)
         {
             if (OriginalScale.x <= 0f) return intended;
-            if (UniformCapped)
-            {
-                Vector3 cap = OriginalScale * Mathf.Max(1f, _options.EnemyPhysicalFactorCap);
-                return new Vector3(
-                    Mathf.Min(intended.x, cap.x),
-                    Mathf.Min(intended.y, cap.y),
-                    Mathf.Min(intended.z, cap.z));
-            }
-            // Width and height caps are independent: each holds its axis at the cap while
-            // the others grow to Factor. A vanilla height cap keeps the body fitting under
-            // ceilings; a width cap keeps the footprint door-sized.
+            // Per-axis caps win over the uniform cap on their axis (a width cap set on top
+            // of the Growth preset's 1.4 uniform cap means door-sized X/Z, full-Factor Y).
+            // Min, not assignment, so a grow transition animates up to the cap instead of
+            // snapping to it on the first frame.
             Vector3 r = intended;
-            if (WidthCapped)
+            float xz = WidthCapped   ? Mathf.Max(1f, _options.EnemyWidthFactorCap)
+                     : UniformCapped ? Mathf.Max(1f, _options.EnemyPhysicalFactorCap)
+                     : 0f;
+            if (xz > 0f)
             {
-                float w = Mathf.Max(1f, _options.EnemyWidthFactorCap);
-                r.x = OriginalScale.x * w;
-                r.z = OriginalScale.z * w;
+                r.x = Mathf.Min(intended.x, OriginalScale.x * xz);
+                r.z = Mathf.Min(intended.z, OriginalScale.z * xz);
             }
-            if (HeightCapped)
-                r.y = OriginalScale.y * Mathf.Max(1f, _options.EnemyHeightFactorCap);
+            // A width cap replaces the uniform cap outright (height tracks full Factor,
+            // per the EnemyWidthFactorCap contract); only a height cap can hold Y down.
+            float y = HeightCapped                    ? Mathf.Max(1f, _options.EnemyHeightFactorCap)
+                    : UniformCapped && !WidthCapped   ? Mathf.Max(1f, _options.EnemyPhysicalFactorCap)
+                    : 0f;
+            if (y > 0f)
+                r.y = Mathf.Min(intended.y, OriginalScale.y * y);
             return r;
         }
 
@@ -874,7 +874,9 @@ namespace ScalerCore
             _options.SpeedFactor, _options.AnimSpeedMultiplier,
             _options.FootstepPitchMultiplier, _options.BonkImmuneDuration,
             _options.RestoreSpeed, _options.AudioPresence,
-            _options.EnemyPhysicalFactorCap
+            _options.EnemyPhysicalFactorCap,
+            _options.EnemyWidthFactorCap, _options.EnemyNavRadiusFactorCap,
+            _options.EnemyHeightFactorCap
         };
 
         bool[] PackBools() => new[] {
@@ -915,6 +917,9 @@ namespace ScalerCore
             _options.RestoreSpeed          = opts.Length > 7 ? opts[7] : 0f;
             _options.AudioPresence         = opts.Length > 8 ? opts[8] : 1f;
             _options.EnemyPhysicalFactorCap = opts.Length > 9 ? opts[9] : 0f;
+            _options.EnemyWidthFactorCap     = opts.Length > 10 ? opts[10] : 0f;
+            _options.EnemyNavRadiusFactorCap = opts.Length > 11 ? opts[11] : 0f;
+            _options.EnemyHeightFactorCap    = opts.Length > 12 ? opts[12] : 0f;
             _options.PreserveMass          = flags[0];
             _options.InvertedMode          = flags[1];
             _options.SuppressImpactFlash   = flags.Length > 2 && flags[2];

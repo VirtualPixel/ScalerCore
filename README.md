@@ -188,6 +188,9 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as
 | `FootstepPitchMultiplier` | `1.5` | Player footstep pitch while scaled |
 | `AudioPresence` | `1.0` | Grow-side audio presence: 0 = pitch only, 1 = full (volume lift, light reverb, falloff scales with size). Rides the sync RPC. |
 | `EnemyPhysicalFactorCap` | `0` | Grow-only, enemies only: colliders and nav radius stop at this factor while visuals/reach/audio keep climbing to `Factor`, so a giant still fits the level. 0 disables. |
+| `EnemyWidthFactorCap` | `0` | Grow-only, enemies only: the body's X/Z stop at this factor while height keeps climbing to `Factor`. Wins over `EnemyPhysicalFactorCap`. 0 disables. |
+| `EnemyHeightFactorCap` | `0` | Grow-only, enemies only: the collider's Y stops at this factor while width grows to `Factor`, so a giant bulks out instead of wedging under ceilings. 0 disables. |
+| `EnemyNavRadiusFactorCap` | `0` | Grow-only, enemies only: caps nav agent radius growth apart from the body so a wide enemy still paths through doorways. 0 falls back to the physical/width factor. |
 | `AllowedTargets` | `All` | Flags: `Players`, `Enemies`, `Items`, `Valuables`, `All` |
 | `InvertedMode` | `false` | If true, scaled state is the default and bonk temporarily grows back |
 | `SuppressValueDropExpand` | `false` | If true, valuables won't expand when damaged while scaled (for cart mods) |
