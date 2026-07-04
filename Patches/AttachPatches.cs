@@ -1,5 +1,4 @@
 using HarmonyLib;
-using Photon.Pun;
 
 namespace ScalerCore
 {
@@ -40,8 +39,8 @@ namespace ScalerCore
         static void Postfix(PlayerAvatar __instance)
         {
             if (__instance.GetComponent<ScaleController>() != null) return;
+            // ScaleController.Awake registers with the RPC routing cache at attach time.
             __instance.gameObject.AddComponent<ScaleController>();
-            __instance.GetComponent<PhotonView>()?.RefreshRpcMonoBehaviourCache();
         }
     }
 

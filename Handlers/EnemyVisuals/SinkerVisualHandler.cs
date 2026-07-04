@@ -7,9 +7,11 @@ namespace ScalerCore.Handlers.EnemyVisuals
     /// the mesh through the floor.
     ///
     /// Shrinking and growing need different compensation. Shrinking shrinks the colliders
-    /// too, so physics settles the body lower and we track the rb-to-mesh gap. Growing here
-    /// holds the collider near vanilla (grow caps), so the body doesn't move and we instead
-    /// lift the mesh by how far scaling its own geometry would sink the feet.
+    /// too, so physics settles the body lower and we track the rb-to-mesh gap. Growing
+    /// scales the mesh around a pivot the game keeps pinned at its vanilla local position,
+    /// which pushes the feet down by the pivot-to-feet distance times the growth, so we
+    /// lift the mesh by exactly that. The lift reads only the pinned pivot, not the body,
+    /// so it holds with or without the grow caps engaged.
     /// </summary>
     internal class SinkerVisualHandler : IEnemyVisualHandler
     {

@@ -362,10 +362,22 @@ namespace ScalerCore
 
         internal bool PhysicallyCapped => WidthCapped || UniformCapped || HeightCapped;
 
-        internal float PhysicalFactor =>
-            WidthCapped ? Mathf.Max(1f, _options.EnemyWidthFactorCap)
+        // Effective grow cap per axis group; 0 = uncapped. The precedence rule lives
+        // here and only here: a width cap beats the uniform cap on X/Z, a height cap
+        // beats it on Y, and a width cap releases the uniform cap's hold on Y entirely
+        // (height tracks full Factor, per the EnemyWidthFactorCap contract).
+        float XZCapFactor =>
+            WidthCapped   ? Mathf.Max(1f, _options.EnemyWidthFactorCap)
             : UniformCapped ? Mathf.Max(1f, _options.EnemyPhysicalFactorCap)
-            : _options.Factor;
+            : 0f;
+
+        float YCapFactor =>
+            HeightCapped                  ? Mathf.Max(1f, _options.EnemyHeightFactorCap)
+            : UniformCapped && !WidthCapped ? Mathf.Max(1f, _options.EnemyPhysicalFactorCap)
+            : 0f;
+
+        internal float PhysicalFactor =>
+            XZCapFactor > 0f ? XZCapFactor : _options.Factor;
 
         // Nav agent radius can be held narrower than the body so a wide enemy still
         // paths through doorways. Falls back to PhysicalFactor when not set.
@@ -380,24 +392,16 @@ namespace ScalerCore
         Vector3 ClampPhysical(Vector3 intended)
         {
             if (OriginalScale.x <= 0f) return intended;
-            // Per-axis caps win over the uniform cap on their axis (a width cap set on top
-            // of the Growth preset's 1.4 uniform cap means door-sized X/Z, full-Factor Y).
             // Min, not assignment, so a grow transition animates up to the cap instead of
             // snapping to it on the first frame.
             Vector3 r = intended;
-            float xz = WidthCapped   ? Mathf.Max(1f, _options.EnemyWidthFactorCap)
-                     : UniformCapped ? Mathf.Max(1f, _options.EnemyPhysicalFactorCap)
-                     : 0f;
+            float xz = XZCapFactor;
             if (xz > 0f)
             {
                 r.x = Mathf.Min(intended.x, OriginalScale.x * xz);
                 r.z = Mathf.Min(intended.z, OriginalScale.z * xz);
             }
-            // A width cap replaces the uniform cap outright (height tracks full Factor,
-            // per the EnemyWidthFactorCap contract); only a height cap can hold Y down.
-            float y = HeightCapped                    ? Mathf.Max(1f, _options.EnemyHeightFactorCap)
-                    : UniformCapped && !WidthCapped   ? Mathf.Max(1f, _options.EnemyPhysicalFactorCap)
-                    : 0f;
+            float y = YCapFactor;
             if (y > 0f)
                 r.y = Mathf.Min(intended.y, OriginalScale.y * y);
             return r;
@@ -479,11 +483,8 @@ namespace ScalerCore
 
         // Resolves the PhotonView used for RPCs and registers this freshly-added
         // component with PUN's RPC routing cache. Cheap and idempotent: resolves once.
-        // Start does this, but a late-spawned object can be told to shrink in the same
-        // frame it is attached (the host's PhysGrabObject.Start mutator runs after the
-        // AddComponent patch but before this component's own Start), so _networkPV would
-        // still be null and the shrink RPC would be skipped. Resolving on demand at the
-        // RPC sites closes that race.
+        // Awake registers at attach time so same-pass RPCs route; the init and dispatch
+        // sites re-call it as a safety net in case a future attach path skips Awake.
         void EnsureNetworkPV()
         {
             if (_networkPV != null) return;
