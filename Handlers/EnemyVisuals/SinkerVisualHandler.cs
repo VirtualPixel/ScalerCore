@@ -24,7 +24,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
         internal sealed class SinkerState
         {
             internal float OriginalGap;  // rb.localPos.y - animTarget.localPos.y, for shrinking
-            internal float FootOffset;   // pivot-to-feet distance, for growing
+            internal float FootOffset;   // pivot-to-floor distance, for growing
         }
 
         public object? Setup(ScaleController ctrl, EnemyHandler.State state, EnemyParent ep)
