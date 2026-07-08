@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4
+
+### Fixed
+- Player scaling no longer errors on the latest game update. The speed adjustment applied while a player shrinks or grows is now matched to the game's current movement call, so scaling a player applies cleanly instead of raising a missing-method error mid-effect.
+
 ## 1.0.3
 
 ### New
