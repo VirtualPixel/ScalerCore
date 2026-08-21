@@ -171,11 +171,7 @@ namespace ScalerCore.Utilities
         /// <summary>Sample `delay` frames back from the write head, linearly interpolated.</summary>
         float Read(float delay, int channel)
         {
-            float pos = _write - delay;
-            if (pos < 0f) pos += Window;
-            int older = (int)pos;
-            float blend = pos - older;
-            int newer = older + 1 == Window ? 0 : older + 1;
+            RingTap.Locate(_write, delay, Window, out int older, out int newer, out float blend);
             float a = _history![older * _channels + channel];
             float b = _history[newer * _channels + channel];
             return a + (b - a) * blend;

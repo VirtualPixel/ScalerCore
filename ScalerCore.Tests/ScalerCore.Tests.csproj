@@ -14,6 +14,7 @@
        game assemblies, which have no runtime outside the game. -->
   <ItemGroup>
     <Compile Include="../Handlers/EnemyVisuals/GroundingTrack.cs" />
+    <Compile Include="../Utilities/RingTap.cs" />
   </ItemGroup>
 
   <ItemGroup>
