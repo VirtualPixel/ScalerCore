@@ -27,7 +27,7 @@ namespace ScalerCore.Utilities
     /// At vanilla pitch the wet path is faded out entirely and the samples pass through
     /// untouched, so an unscaled lobby sounds exactly as it did before.
     /// </summary>
-    public class VoicePitchShifter : MonoBehaviour
+    internal class VoicePitchShifter : MonoBehaviour
     {
         // Half of this is the delay a shifted voice picks up, and the buffer wrap rate is
         // |1 - pitch| / this. 3072 frames is 64 ms at 48 kHz, which puts the wrap at under
@@ -62,7 +62,7 @@ namespace ScalerCore.Utilities
         /// 1.30, and a shrunk player talking through a shrunk walkie or a shrunk set of teeth
         /// stacks on top of that.
         /// </summary>
-        public float Pitch
+        internal float Pitch
         {
             get => _pitch;
             set => _pitch = Mathf.Clamp(value, 0.5f, 3f);
@@ -74,7 +74,7 @@ namespace ScalerCore.Utilities
         /// so a voice with no Photon stream behind it (the local player's own, a player whose
         /// microphone never transmits) keeps vanilla behaviour instead of going flat.
         /// </summary>
-        public bool InChain => _inChain;
+        internal bool InChain => _inChain;
 
         internal static VoicePitchShifter? For(PlayerVoiceChat voice) =>
             ByVoice.TryGetValue(voice, out var shifter) ? shifter : null;
