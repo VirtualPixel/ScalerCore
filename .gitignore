@@ -4,7 +4,6 @@ plugins/
 docs/
 *.user
 .vs/
-.claude/
 Output-Build.txt
 BuildZip/
 BuildInfo.g.cs
