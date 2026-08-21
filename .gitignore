@@ -8,3 +8,4 @@ Output-Build.txt
 BuildZip/
 BuildInfo.g.cs
 nupkg/
+graphify-out/
