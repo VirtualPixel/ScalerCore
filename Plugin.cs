@@ -27,26 +27,6 @@ namespace ScalerCore
             System.Environment.GetEnvironmentVariable("SCALERCORE_DEBUG") == "1"
             || System.IO.File.Exists(System.IO.Path.Combine(Paths.ConfigPath, "scalercore_debug"));
 
-        // Voice buffer instrumentation for the "voices cut out while shrunk" report.
-        // Arms like DebugDraw so testers on Gale can turn it on without env vars, and
-        // carries a value so the noisy Photon-logger tier is opt-in: "photon" adds
-        // Photon Voice's own underrun lines, anything else is just our lag sampler.
-        // See Utilities/VoiceBufferDiag.
-        internal static readonly string VoiceDiag = ReadVoiceDiagArm();
-
-        static string ReadVoiceDiagArm()
-        {
-            string fromEnv = System.Environment.GetEnvironmentVariable("SCALERCORE_VOICEDIAG") ?? "";
-            if (fromEnv != "") return fromEnv.Trim().ToLowerInvariant();
-
-            string sentinel = System.IO.Path.Combine(Paths.ConfigPath, "scalercore_voicediag");
-            if (!System.IO.File.Exists(sentinel)) return "";
-            // An empty sentinel still arms the sampler: a tester told to "make the file"
-            // shouldn't have to know it needs contents.
-            string firstLine = System.IO.File.ReadAllText(sentinel).Trim().ToLowerInvariant();
-            return firstLine == "" ? "1" : firstLine;
-        }
-
         void Awake()
         {
             Log = Logger;
@@ -60,11 +40,6 @@ namespace ScalerCore
 
             gameObject.AddComponent<AprilFools.MapCollapse>();
             if (DebugDraw) gameObject.AddComponent<ExtractionVolumeDebug>();
-            if (VoiceDiag != "")
-            {
-                gameObject.AddComponent<VoiceBufferDiag>();
-                Log.LogInfo($"[SC-VOICE] voice buffer diagnostics armed (mode: {VoiceDiag})");
-            }
         }
     }
 }

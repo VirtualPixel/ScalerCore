@@ -99,16 +99,6 @@
       <HintPath>$(RepoManagedDir)/PhotonRealtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <!-- Photon Voice: Speaker owns the AudioSource PlayerVoiceChat pitches, and its
-         Lag/PlayDelayConfig are what VoiceBufferDiag reads. -->
-    <Reference Include="PhotonVoice">
-      <HintPath>$(RepoManagedDir)/PhotonVoice.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="PhotonVoice.API">
-      <HintPath>$(RepoManagedDir)/PhotonVoice.API.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>$(RepoManagedDir)/UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
