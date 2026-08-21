@@ -174,6 +174,47 @@ namespace ScalerCore.Handlers
                 : Mathf.Clamp(1f + (1f - factor) * 0.5f, 1f, 2f);
 
         /// <summary>
+        /// Pitch, reverb and carry for a scaled player's voice, on every client.
+        ///
+        /// Split out of OnScale because PlayerAvatar.voiceChat is filled in by an RPC that
+        /// routinely lands after the scale does, so at scale time there is often nothing to
+        /// treat. VoiceChatFetchPatch calls this again the moment the voice chat attaches.
+        /// Safe to call repeatedly: the pitch override is idempotent and the presence capture
+        /// is guarded so it can never record already-treated values as the originals.
+        /// </summary>
+        internal static void ApplyVoiceTreatment(ScaleController ctrl)
+        {
+            if (ctrl._options.SuppressVoicePitch) return;
+            if (ctrl.HandlerState is not State state) return;
+
+            var voiceChat = state.PlayerAvatar.voiceChat;
+            if (voiceChat == null) return;
+
+            float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
+            float pitchMult = VoicePitchMult(factor);
+            voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 9999f);
+
+            // Same presence treatment the entity sounds get: a giant's voice leans into the
+            // room reverb and carries further. Volume is left alone, mic gain belongs to the
+            // player. Applied per client on the voice source, rides ScaleOptions.AudioPresence.
+            var voiceSrc = voiceChat.audioSource;
+            if (ctrl._options.Factor > 1f && ctrl._options.AudioPresence > 0f
+                && voiceSrc != null && !state.VoicePresenceApplied)
+            {
+                float presence = Mathf.Clamp01(ctrl._options.AudioPresence);
+                state.OriginalVoiceReverb  = voiceSrc.reverbZoneMix;
+                state.OriginalVoiceMaxDist = voiceSrc.maxDistance;
+                // Same light reverb touch as AudioPitchHelper: past 1.0 the wet path
+                // amplifies and speech drowns in the room
+                voiceSrc.reverbZoneMix = Mathf.Min(1f, state.OriginalVoiceReverb * (1f + 0.15f * presence));
+                voiceSrc.maxDistance   = state.OriginalVoiceMaxDist * Mathf.Lerp(1f, ctrl._options.Factor, presence);
+                state.VoicePresenceApplied = true;
+            }
+
+            Plugin.Log.LogDebug($"[SC] VOICE PITCH SET  {ctrl._displayName}  pitch={pitchMult:F2}  isLocal={state.PlayerAvatar.isLocal}  isMine={ctrl._networkPV?.IsMine}");
+        }
+
+        /// <summary>
         /// Voice pitch override + local player effects at shrink time.
         /// Called from DispatchShrink() and RPC_Shrink() via handler interface.
         /// </summary>
@@ -182,39 +223,7 @@ namespace ScalerCore.Handlers
             var state = (State?)ctrl.HandlerState;
             if (state == null) return;
 
-            // Voice pitch: apply on all clients, unless the active session opted out.
-            if (!ctrl._options.SuppressVoicePitch)
-            {
-                if (state.PlayerAvatar.voiceChat != null)
-                {
-                    float factor = ctrl.OriginalScale.x > 0f ? ctrl._target.x / ctrl.OriginalScale.x : ctrl._options.Factor;
-                    float pitchMult = VoicePitchMult(factor);
-                    state.PlayerAvatar.voiceChat.OverridePitch(pitchMult, 0.2f, 0.5f, 9999f);
-
-                    // Same presence treatment the entity sounds get: a giant's voice
-                    // leans into the room reverb and carries further. Volume is left
-                    // alone, mic gain belongs to the player. Applied per client on
-                    // the voice source, rides ScaleOptions.AudioPresence.
-                    var voiceSrc = state.PlayerAvatar.voiceChat.audioSource;
-                    if (ctrl._options.Factor > 1f && ctrl._options.AudioPresence > 0f
-                        && voiceSrc != null && !state.VoicePresenceApplied)
-                    {
-                        float presence = Mathf.Clamp01(ctrl._options.AudioPresence);
-                        state.OriginalVoiceReverb  = voiceSrc.reverbZoneMix;
-                        state.OriginalVoiceMaxDist = voiceSrc.maxDistance;
-                        // Same light reverb touch as AudioPitchHelper: past 1.0
-                        // the wet path amplifies and speech drowns in the room
-                        voiceSrc.reverbZoneMix = Mathf.Min(1f, state.OriginalVoiceReverb * (1f + 0.15f * presence));
-                        voiceSrc.maxDistance   = state.OriginalVoiceMaxDist * Mathf.Lerp(1f, ctrl._options.Factor, presence);
-                        state.VoicePresenceApplied = true;
-                    }
-                    Plugin.Log.LogDebug($"[SC] VOICE PITCH SET  {ctrl._displayName}  pitch={pitchMult:F2}  isLocal={state.PlayerAvatar.isLocal}  isMine={ctrl._networkPV?.IsMine}");
-                }
-                else
-                {
-                    Plugin.Log.LogDebug($"[SC] VOICE PITCH SKIP  {ctrl._displayName}  voiceChat=null  isLocal={state.PlayerAvatar.isLocal}  voiceChatFetched={state.PlayerAvatar.voiceChatFetched}");
-                }
-            }
+            ApplyVoiceTreatment(ctrl);
 
             // Local-player-only: adjust camera, grab, and movement. In singleplayer
             // PhotonNetwork.InRoom is false so we skip the IsMine check entirely.
