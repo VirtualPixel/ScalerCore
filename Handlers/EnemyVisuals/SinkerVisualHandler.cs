@@ -24,7 +24,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
         internal sealed class SinkerState
         {
             internal float OriginalGap;  // rb.localPos.y - animTarget.localPos.y, for shrinking
-            internal float FootOffset;   // pivot-to-feet distance, for growing
+            internal readonly VisualGrounding Grounding = new();
         }
 
         public object? Setup(ScaleController ctrl, EnemyHandler.State state, EnemyParent ep)
@@ -33,7 +33,6 @@ namespace ScalerCore.Handlers.EnemyVisuals
             return new SinkerState
             {
                 OriginalGap = state.RbOriginalLocalPos.y - state.AnimOriginalLocalPos.y,
-                FootOffset = VisualGrounding.MeasureFootOffset(state.AnimTarget),
             };
         }
 
@@ -52,7 +51,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
             {
                 // Growing: lift the mesh to keep its feet on the floor (skip for floaters).
                 if (_groundOnGrow)
-                    VisualGrounding.Apply(state, sinker.FootOffset, ratio);
+                    sinker.Grounding.Apply(state, ratio);
             }
             else
             {
@@ -71,6 +70,10 @@ namespace ScalerCore.Handlers.EnemyVisuals
 
         public void OnRestore(ScaleController ctrl, EnemyHandler.State state, object? visualState)
         {
+            // The shrink servo moves the mesh too, so the vanilla local pose is the right
+            // thing to put back here; the grow lift only needs its tracking dropped.
+            (visualState as SinkerState)?.Grounding.Forget();
+
             if (state.AnimTarget != null)
             {
                 state.AnimTarget.localScale = state.AnimOriginalScale;

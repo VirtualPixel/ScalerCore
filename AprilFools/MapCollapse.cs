@@ -52,21 +52,21 @@ namespace ScalerCore.AprilFools
 
         /// <summary>
         /// Trigger the map collapse event. Call from implementation hit patches
-        /// after checking your own config. Safe to call multiple times . ignored
+        /// after checking your own config. Safe to call multiple times: ignored
         /// if a collapse is already running or completed.
         /// </summary>
         public static void OnMapHit()
         {
             if (!CanStart()) return;
 
-            // Singleplayer / no PUN room . start the local coroutine directly.
+            // Singleplayer or no PUN room: start the local coroutine directly.
             if (!SemiFunc.IsMultiplayer())
             {
                 _instance!.Begin(Clock);
                 return;
             }
 
-            // Multiplayer . go through the relay so every client begins together.
+            // Multiplayer: go through the relay so every client begins together.
             // PunManager owns a stable scene PhotonView; piggybacking it lets us
             // use [PunRPC] method names instead of arbitrary RaiseEvent byte codes.
             var relay = MapCollapseRelay.EnsureFor(PunManager.instance);
@@ -297,7 +297,7 @@ namespace ScalerCore.AprilFools
 
         // --- chat lines ------------------------------------------------------
         // Worded panic messages go to PlayerSay (random player name in the lobby).
-        // Taxman speaks in emojis only . see TaxmanEmoji.
+        // Taxman speaks in emojis only, see TaxmanEmoji.
 
         static readonly string[] Panic1 = {
             "IS THE CEILING GETTING LOWER\nOR AM I LOSING IT {:'(}",
@@ -335,7 +335,7 @@ namespace ScalerCore.AprilFools
             "MY LAST WILL IS\nUNDER THE MATTRESS {heartbreak}",
         };
 
-        // Taxman doesn't speak . just reacts. These fire on their own cadence.
+        // Taxman doesn't speak, he just reacts. These fire on their own cadence.
         static readonly string[] TaxmanEmoji = {
             "{:o}",
             "{:o}{:o}",
@@ -378,7 +378,7 @@ namespace ScalerCore.AprilFools
             screen.isTyping = false;
             var name = PickRandomPlayerName();
             // Fall back to the taxman if no living player has a name (e.g. everyone
-            // already dead during the final crush) . better to print the message than drop it.
+            // already dead during the final crush), and printing the message beats dropping it.
             screen.MessageSendCustom(name ?? "", msg, 2);
         }
 
@@ -410,7 +410,7 @@ namespace ScalerCore.AprilFools
 
         IEnumerator Run()
         {
-            // buildup . shake + single soft scare to set the tone. All timing
+            // buildup: shake plus a single soft scare to set the tone. All timing
             // hangs off the shared clock anchor; a late joiner whose Elapsed()
             // is already past 10 skips the buildup and lands mid-collapse.
             bool firstReaction = false;
@@ -447,7 +447,7 @@ namespace ScalerCore.AprilFools
             SetupLightsAndSound();
             PanicEnemies();
 
-            // let players send the truck . set completed count without triggering
+            // let players send the truck: set completed count without triggering
             // the extraction state machines (which play tube/slam sounds).
             // Host-only: setting allExtractionPointsCompleted on every client fires
             // the vanilla truck-arrival cascade (sirens, horn, lights) on each.
@@ -601,7 +601,7 @@ namespace ScalerCore.AprilFools
                     }
                 }
 
-                // Taxman reaction stream . emojis only, fires on a separate cadence
+                // Taxman reaction stream: emojis only, fires on a separate cadence
                 // from the player panic messages so the screen feels chatty.
                 if (t >= _nextTaxmanEmoji && !killed)
                 {
@@ -635,7 +635,7 @@ namespace ScalerCore.AprilFools
         {
             var cam = Camera.main;
 
-            // slam FOV down . feels like being compressed
+            // slam FOV down, it feels like being compressed
             if (cam != null)
             {
                 float startFov = cam.fieldOfView;
@@ -679,7 +679,7 @@ namespace ScalerCore.AprilFools
                 AssetManager.instance?.PhysImpactEffect(avatar.transform.position);
             }
 
-            // PlayerHealth.Hurt routes through HurtRPC. Host-only . otherwise every
+            // PlayerHealth.Hurt routes through HurtRPC. Host-only, otherwise every
             // client runs the kill loop and the damage stacks on every player.
             if (!SemiFunc.IsMasterClientOrSingleplayer()) yield break;
             foreach (var avatar in GetPlayers())
@@ -793,7 +793,7 @@ namespace ScalerCore.AprilFools
                 RenderSettings.fogStartDistance = Mathf.Lerp(_origFogStart, 0f, p * p);
             }
 
-            // narrow FOV . sells "walls closing in" instead of "I'm growing"
+            // narrow FOV, which sells "walls closing in" instead of "I'm growing"
             var cam = Camera.main;
             if (cam != null)
                 cam.fieldOfView = Mathf.Lerp(_origFov, _origFov * 0.7f, p * p);
@@ -806,7 +806,7 @@ namespace ScalerCore.AprilFools
                 else                { CameraGlitch.Instance.PlayLong();  _nextGlitch = t + Mathf.Lerp(2f, 0.5f, p); }
             }
 
-            // scare stingers . soft early, impacts late
+            // scare stingers: soft early, impacts late
             if (t >= _nextScare && AudioScare.instance != null)
             {
                 if      (p < 0.3f) { AudioScare.instance.PlaySoft();   _nextScare = t + 15f; }

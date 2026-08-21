@@ -54,7 +54,7 @@ namespace ScalerCore.Handlers
             Register(new ValuableHandler(),
                 go => go.GetComponent<ValuableObject>() != null, 0);
             // Cosmetic boxes (v0.4): grabbable physics object with health, no ValuableObject
-            // or ItemAttributes . needs its own handler so the predicate matches.
+            // or ItemAttributes, so it needs its own handler for the predicate to match.
             Register(new CosmeticHandler(),
                 go => go.GetComponent<CosmeticWorldObject>() != null, 0);
             // Vehicles (v0.4 ItemVehicle): match BEFORE ItemHandler (priority 1) because they

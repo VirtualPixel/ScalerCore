@@ -13,25 +13,19 @@ namespace ScalerCore.Handlers.EnemyVisuals
     {
         internal sealed class BirthdayBoyState
         {
-            internal EnemyBirthdayBoy BirthdayBoy = null!;
-            internal float FootOffset; // pivot-to-feet distance at full scale (world Y)
+            internal EnemyBirthdayBoy? BirthdayBoy;
+            internal readonly VisualGrounding Grounding = new();
         }
 
         public object? Setup(ScaleController ctrl, EnemyHandler.State state, EnemyParent ep)
         {
             var bb = ep.GetComponentInChildren<EnemyBirthdayBoy>();
             if (bb == null)
-            {
-                Plugin.Log.LogWarning("[SC]   BirthdayBoy: EnemyBirthdayBoy component not found, falling back to default");
-                return null;
-            }
+                Plugin.Log.LogWarning("[SC]   BirthdayBoy: EnemyBirthdayBoy component not found, balloons stay full size");
+            else
+                Plugin.Log.LogDebug($"[SC]   BirthdayBoy: cached, maxBalloons={bb.maxBalloons}");
 
-            Plugin.Log.LogDebug($"[SC]   BirthdayBoy: cached, maxBalloons={bb.maxBalloons}");
-            return new BirthdayBoyState
-            {
-                BirthdayBoy = bb,
-                FootOffset = VisualGrounding.MeasureFootOffset(state.AnimTarget),
-            };
+            return new BirthdayBoyState { BirthdayBoy = bb };
         }
 
         public void OnLateUpdate(ScaleController ctrl, EnemyHandler.State state, object? visualState, float ratio)
@@ -40,17 +34,17 @@ namespace ScalerCore.Handlers.EnemyVisuals
             if (state.AnimTarget != null)
                 state.AnimTarget.localScale = state.AnimOriginalScale * ratio;
 
-            // Keep the mesh feet on the floor.
-            if (visualState is BirthdayBoyState bb)
-                VisualGrounding.Apply(state, bb.FootOffset, ratio);
-
             if (state.BtHead != null)
                 state.BtHead.transform.localScale = state.BtHeadOriginalScale * ratio;
 
-            // Scale all active balloons to match.
-            if (visualState is not BirthdayBoyState bbState) return;
+            if (visualState is not BirthdayBoyState bb) return;
 
-            foreach (KeyValuePair<Vector3, GameObject> kvp in bbState.BirthdayBoy.balloons)
+            // Keep the mesh feet on the floor.
+            bb.Grounding.Apply(state, ratio);
+
+            // Scale all active balloons to match.
+            if (bb.BirthdayBoy == null) return;
+            foreach (KeyValuePair<Vector3, GameObject> kvp in bb.BirthdayBoy.balloons)
             {
                 if (kvp.Value == null) continue;
                 kvp.Value.transform.localScale = Vector3.one * ratio;
@@ -59,18 +53,16 @@ namespace ScalerCore.Handlers.EnemyVisuals
 
         public void OnRestore(ScaleController ctrl, EnemyHandler.State state, object? visualState)
         {
+            (visualState as BirthdayBoyState)?.Grounding.Restore(state.AnimTarget);
+
             if (state.AnimTarget != null)
-            {
                 state.AnimTarget.localScale = state.AnimOriginalScale;
-                state.AnimTarget.localPosition = state.AnimOriginalLocalPos;
-            }
             if (state.BtHead != null)
                 state.BtHead.transform.localScale = state.BtHeadOriginalScale;
 
             // Restore all balloon scales.
-            if (visualState is not BirthdayBoyState bbState) return;
-
-            foreach (KeyValuePair<Vector3, GameObject> kvp in bbState.BirthdayBoy.balloons)
+            if (visualState is not BirthdayBoyState bb || bb.BirthdayBoy == null) return;
+            foreach (KeyValuePair<Vector3, GameObject> kvp in bb.BirthdayBoy.balloons)
             {
                 if (kvp.Value == null) continue;
                 kvp.Value.transform.localScale = Vector3.one;

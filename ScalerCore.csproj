@@ -33,6 +33,13 @@
     <PackageTags>repo;bepinex;harmony;modding;scaling;library</PackageTags>
   </PropertyGroup>
 
+  <!-- The test project lives inside this folder, so keep its sources out of the plugin's
+       default compile glob. -->
+  <ItemGroup>
+    <Compile Remove="ScalerCore.Tests/**" />
+    <None Remove="ScalerCore.Tests/**" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
     <None Include="icon.png" Pack="true" PackagePath="\" />

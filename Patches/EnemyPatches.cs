@@ -74,7 +74,7 @@ namespace ScalerCore.Patches
                     ctrl = parent.GetComponentInChildren<ScaleController>();
             }
             if (ctrl == null || !ctrl.IsScaled) return;
-            // Only disable instakill when shrinking . enlarged enemies should keep it.
+            // Only disable instakill when shrinking; enlarged enemies should keep it.
             if (ctrl._options.Factor < 1f) __instance.playerKill = false;
             __instance.playerDamage = Mathf.RoundToInt(__instance.playerDamage * ctrl!._options.Factor);
             __instance.playerTumbleImpactHurtDamage = Mathf.RoundToInt(__instance.playerTumbleImpactHurtDamage * ctrl!._options.Factor);

@@ -60,7 +60,7 @@ namespace ScalerCore.Handlers
                 Plugin.Log.LogDebug($"[SC]   Door: breaking hinge on {ctrl._displayName} (anchor too far from origin)");
 
                 // HingeBreakImpulse sets broken=true, plays break sound/FX, changes layers.
-                // But it does NOT destroy the HingeJoint . that only happens when Unity's
+                // But it does NOT destroy the HingeJoint; that only happens when Unity's
                 // OnJointBreak fires from physics forces. We must destroy it ourselves.
                 state.Hinge.HingeBreakImpulse();
 
@@ -74,7 +74,7 @@ namespace ScalerCore.Handlers
 
         public void OnRestore(ScaleController ctrl, bool isBonk)
         {
-            // Hinge break is permanent . no restore needed.
+            // Hinge break is permanent, so there is nothing to restore.
         }
 
         public void OnUpdate(ScaleController ctrl) { }
