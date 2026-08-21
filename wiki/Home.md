@@ -12,7 +12,7 @@ Add a hard dependency in your plugin:
 [BepInDependency("Vippy.ScalerCore", BepInDependency.DependencyFlags.HardDependency)]
 ```
 
-Reference `ScalerCore.dll` in your project. ScalerCore auto-attaches `ScaleController` components to enemies, players, valuables, items, and doors at runtime.
+Reference `ScalerCore.dll` in your project. ScalerCore auto-attaches `ScaleController` components to enemies, players, valuables, items, carts, vehicles, cosmetic boxes, dead Semibot heads, the shop radio, and doors at runtime.
 
 Basic usage:
 
@@ -36,7 +36,7 @@ bool tiny = ScaleManager.IsScaled(targetGameObject);
 
 ## Custom Handler Registration
 
-Built-in handlers cover enemies, players, valuables, and items. To add custom behavior for specific objects, implement `IScaleHandler` and register it:
+Built-in handlers cover enemies, players, valuables, items, carts, vehicles, cosmetic boxes, doors, and plain props (dead Semibot heads, the shop radio). To add custom behavior for specific objects, implement `IScaleHandler` and register it:
 
 ```csharp
 using ScalerCore;
@@ -94,8 +94,11 @@ The registry checks predicates in descending priority order. First match wins.
 | `RestoreImmediate(GameObject target)` | Restore instantly (respects bonk immunity timer). No-op when locked via `RejectExternalApply`. |
 | `ForceApply(GameObject target, ScaleOptions options)` | Apply without the `RejectExternalApply` check. For the mod that owns the lock. |
 | `ForceRestore(GameObject target)` | Restore without the `RejectExternalApply` check. For the mod that owns the lock. |
+| `UpdateOptions(GameObject target, ScaleOptions options)` | Replace the live session's options without re-dispatching. False on missing controller, no active session, or `RejectExternalApply`. |
+| `ForceUpdateOptions(GameObject target, ScaleOptions options)` | Same without the `RejectExternalApply` check. |
 | `IsScaled(GameObject target)` | Returns true if currently scaled. |
 | `CleanupAll()` | Restore all scaled objects. Called automatically on level change. |
+| `AllowDeadHeads` | Property. Whether scaling may hit dead Semibot heads. Off by default; the calling mod owns the policy. |
 
 ### ScaleController (MonoBehaviourPunCallbacks)
 

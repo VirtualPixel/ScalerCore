@@ -17,7 +17,7 @@ If you're building a mod that changes the size of things (shrink rays, growth po
 Reference the API at compile time via NuGet (runtime stays on Thunderstore, so exclude it from your output to avoid double-loading the DLL):
 
 ```xml
-<PackageReference Include="ScalerCore" Version="1.0.0" ExcludeAssets="runtime" PrivateAssets="all" />
+<PackageReference Include="ScalerCore" Version="1.0.5" ExcludeAssets="runtime" PrivateAssets="all" />
 ```
 
 Then declare the runtime dependency: add `Vippy-ScalerCore-<version>` to your Thunderstore `manifest.json`, and a hard dependency in your plugin:
@@ -28,7 +28,7 @@ Then declare the runtime dependency: add `Vippy-ScalerCore-<version>` to your Th
 
 (Prefer a direct DLL reference? You can still `<Reference>` `ScalerCore.dll` with `Private="false"`. The NuGet package just adds the typed API and IntelliSense.)
 
-ScalerCore automatically attaches `ScaleController` components to all enemies, players, valuables, items, carts, and doors at runtime via Harmony patches. You don't need to add them yourself.
+ScalerCore automatically attaches `ScaleController` components to all enemies, players, valuables, items, carts, vehicles, cosmetic boxes, dead Semibot heads, the shop radio, and doors at runtime via Harmony patches. You don't need to add them yourself.
 
 ## Quick Start
 
@@ -173,7 +173,7 @@ public interface IScaleHandler
 
 ### ScaleOptions
 
-Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as a starting point and override what you need.
+Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as a starting point and override what you need. `ScaleOptions.Growth` is the same struct pre-filled for a growth mod (2x, heavier, slower deliberate animation, low footsteps, `EnemyPhysicalFactorCap` at 1.4); the table below lists the `Default` values.
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -210,6 +210,8 @@ var opts = ScaleOptions.Default;
 opts.AllowedTargets = ScaleTargets.Enemies | ScaleTargets.Valuables;
 ScaleManager.Apply(target, opts); // skips players and items
 ```
+
+There are four bits and more than four handlers. `Items` covers items and vehicles; `Valuables` is the catch-all, so carts, doors, cosmetic boxes, dead Semibot heads and the shop radio all need that bit set.
 
 ## Configuration
 
@@ -253,6 +255,10 @@ For items:
 - Inventory system compatibility (yields during equip/unequip)
 - ForceGrabPoint handling
 
+For vehicles:
+- Visible mesh kept at the right world scale whether or not it's deparented (`ItemVehicle` deparents its mesh while somebody is riding)
+- Stays drivable and pocketable while scaled
+
 For non-pocketable items (carts, cart cannon, cart laser, tracker):
 - Become pocketable while shrunken (press inventory key to stash)
 - Shrunken players can't pocket shrunken items. If you get shrunk while holding one, it drops
@@ -271,4 +277,15 @@ For all types:
 
 ## Reference Implementation
 
-[ShrinkerGun: COMPRESSOR](https://github.com/Vippy/ShrinkerGun-COMPRESSOR) is a shrink ray gun built on ScalerCore. Shows how to build `ScaleOptions`, call `Apply`, and handle per-target-type durations.
+[ShrinkerGun: COMPRESSOR](https://github.com/VirtualPixel/ShrinkerGun-COMPRESSOR) is a shrink ray gun built on ScalerCore. Shows how to build `ScaleOptions`, call `Apply`, and handle per-target-type durations.
+
+## Contact
+
+| Purpose | Where |
+|---|---|
+| Bug reports and suggestions | [GitHub Issues](https://github.com/VirtualPixel/ScalerCore/issues) |
+| Questions, test builds, or just hanging out | [Vippy's Discord](https://discord.gg/kKqhck2NrP) |
+| R.E.P.O. modding in general | [R.E.P.O. Modding Server](https://discord.gg/9fDzZ9sk95) |
+
+Everything I make stays free. If one of these mods made your runs better and you feel like
+saying thanks, there is a [Ko-fi](https://ko-fi.com/vippydev).

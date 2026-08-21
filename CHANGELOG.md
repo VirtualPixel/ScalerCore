@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.5
+
+### Fixed
+- Voice chat stopped cutting out for scaled players. The pitch was written straight onto the AudioSource that Photon Voice uses as its playback sink, and that source is fed by a ring buffer the network fills at exactly the sample rate. Raising the pitch made the source drain faster than the network filled it, so the jitter cushion ran out on a fixed clock (about every two thirds of a second at the pitch a shrunk player runs), Photon threw the write head back to a full cushion ahead, and the gap in between is what everyone heard as the voice dropping. It repeated for as long as the player stayed small. The speaker now runs at normal speed and the pitch happens inside the stream instead, so the buffer never runs dry. Same voice, it just stops disappearing. Voices routed through a scaled walkie-talkie, teeth or dead Semibot head go down the same path, and chat text-to-speech is untouched since it plays an ordinary clip rather than a stream.
+- Scaled players get the whole voice treatment even when their voice chat turns up late. The game hands a player their voice chat object on a network message that usually lands after the scale has already been applied, and the voice step was skipped when that happened: grown players lost the room reverb and the extra carry entirely, and the pitch snapped in instead of easing. It now runs the moment the voice chat attaches.
+- Shrunken enemies stopped floating above the floor. The mesh grounding measured from a height captured when the enemy spawned, which only holds for an enemy whose mesh nothing else moves. The NavMesh agent owns the position of whichever transform it sits on, remote clients walk the whole enemy toward the host's position every frame, and a couple of enemies copy their follow target's position onto their own mesh. All of those ended up pinned at their spawn height and floated (or sank) the moment they reached a floor at a different level. The correction reads the pose the game set this frame now. The pivot-to-feet distance is also measured the first time the enemy is actually scaled rather than at spawn, so a body that switches part of itself on later gets grounded as well.
+
+### Internal
+- No API changes. `ScaleManager`, `ScaleOptions` and `IScaleHandler` are identical to 1.0.4, so mods built against 1.0.4 need nothing.
+- `ScalerCore.Tests` covers the grounding decision, which is the part that got this wrong twice.
+
 ## 1.0.4
 
 ### Fixed
