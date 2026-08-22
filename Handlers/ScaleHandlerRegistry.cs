@@ -11,9 +11,11 @@ namespace ScalerCore.Handlers
             public IScaleHandler Handler;
             public Func<GameObject, bool> Predicate;
             public int Priority;
+            public int Seq;
         }
 
         static readonly List<Entry> _entries = new();
+        static int _nextSeq;
         static bool _builtinsRegistered;
 
         /// <summary>
@@ -23,9 +25,15 @@ namespace ScalerCore.Handlers
         /// </summary>
         public static void Register(IScaleHandler handler, Func<GameObject, bool> predicate, int priority = 0)
         {
-            _entries.Add(new Entry { Handler = handler, Predicate = predicate, Priority = priority });
+            _entries.Add(new Entry { Handler = handler, Predicate = predicate, Priority = priority, Seq = _nextSeq++ });
             // Keep sorted descending by priority so Resolve returns highest-priority match first.
-            _entries.Sort((a, b) => b.Priority.CompareTo(a.Priority));
+            // List.Sort is an introsort and is not stable, and the built-ins nearly all sit at
+            // priority 0 and depend on their registration order (valuables before items, doors
+            // last). Tiebreaking on registration order keeps that from being luck: without it,
+            // one external Register call re-sorts the whole list and can permute the block.
+            _entries.Sort((a, b) => b.Priority != a.Priority
+                ? b.Priority.CompareTo(a.Priority)
+                : a.Seq.CompareTo(b.Seq));
         }
 
         /// <summary>
@@ -33,6 +41,8 @@ namespace ScalerCore.Handlers
         /// </summary>
         public static IScaleHandler? Resolve(GameObject target)
         {
+            // Public surface, and every predicate dereferences this.
+            if (target == null) return null;
             EnsureBuiltins();
             foreach (var entry in _entries)
             {

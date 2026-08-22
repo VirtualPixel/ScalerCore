@@ -37,8 +37,8 @@ namespace ScalerCore.Handlers
 
             if (state.AddedEquippable)
             {
-                PocketHelper.RemoveEquippable(ctrl);
-                state.AddedEquippable = false;
+                if (PocketHelper.RemoveEquippable(ctrl))
+                    state.AddedEquippable = false;
             }
         }
 

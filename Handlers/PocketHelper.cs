@@ -57,15 +57,18 @@ namespace ScalerCore.Handlers
         }
 
         /// <summary>
-        /// Removes the ItemEquippable that was added by InjectEquippable.
-        /// Skips removal if the item is currently in someone's inventory, it'll
-        /// come out at full size naturally since IsScaled is already false.
+        /// Removes the ItemEquippable that was added by InjectEquippable. Returns false when
+        /// it left the component in place, which the caller has to respect: clearing its
+        /// AddedEquippable flag anyway strands the component on a full-size object and leaves
+        /// it pocketable for the rest of the level, which is the thing this class exists to
+        /// prevent.
         /// </summary>
-        internal static void RemoveEquippable(ScaleController ctrl)
+        internal static bool RemoveEquippable(ScaleController ctrl)
         {
             var equippable = ctrl.GetComponent<ItemEquippable>();
-            if (equippable == null) return;
-            if (equippable.IsEquipped()) return;
+            if (equippable == null) return true;
+            // In someone's inventory right now. Leave it and try again on the next restore.
+            if (equippable.IsEquipped()) return false;
 
             Object.Destroy(equippable);
             ctrl._itemEquippable = null;
@@ -81,6 +84,7 @@ namespace ScalerCore.Handlers
 
             ctrl._networkPV?.RefreshRpcMonoBehaviourCache();
             Plugin.Log.LogDebug($"[SC] PocketHelper: removed ItemEquippable from {ctrl._displayName}");
+            return true;
         }
 
         /// <summary>

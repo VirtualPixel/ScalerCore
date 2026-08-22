@@ -75,8 +75,8 @@ namespace ScalerCore.Handlers
             var state = (State?)ctrl.HandlerState;
             if (state is { AddedEquippable: true })
             {
-                PocketHelper.RemoveEquippable(ctrl);
-                state.AddedEquippable = false;
+                if (PocketHelper.RemoveEquippable(ctrl))
+                    state.AddedEquippable = false;
             }
         }
 

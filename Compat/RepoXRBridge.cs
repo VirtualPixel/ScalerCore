@@ -75,7 +75,15 @@ namespace ScalerCore.Compat
                 // full type scan when it isn't loaded. When RepoXR is present TypeByName
                 // finds it early, so VR detection stays fast and unchanged.
                 if (!RepoXRAssemblyLoaded())
+                {
+                    // Not loaded YET is not the same as not installed. Warm() runs at our own
+                    // plugin Awake and BepInEx load order between two independent plugins is
+                    // arbitrary, so latching a no here would leave VR support off for the whole
+                    // session on a machine that has RepoXR. Leave the probe unresolved and ask
+                    // again next time; the whole point of the check is that it is cheap.
+                    _probe = -1;
                     return false;
+                }
 
                 var session = AccessTools.TypeByName("RepoXR.Managers.VRSession");
                 var player  = AccessTools.TypeByName("RepoXR.Player.VRPlayer");
