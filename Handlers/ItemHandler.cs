@@ -16,27 +16,33 @@ namespace ScalerCore.Handlers
     {
         // Item effect scaling: explosion size, radius, force, damage, scaled at shrink, restored at expand.
         // Uses reflection so we don't need hard dependencies on specific item classes.
-        internal struct ScaledField { public object comp; public FieldInfo field; public float original; }
+        internal struct ScaledField { public MonoBehaviour comp; public FieldInfo field; public float original; }
 
-        // Field names on item components (or referenced ScriptableObjects) that should scale.
-        // Speed-cap fields on vehicles (ItemVehicle, ValuableArcticSnowBike) are scaled so
-        // a half-size vehicle drives at proportionally lower top speed instead of full speed
-        // on a tiny chassis (the source of the "shrunk vehicle is undrivable" feel).
+        // Field names on item components that should scale.
+        //
+        // Nothing explosion-related is in here any more. explosionSize, explosionDamage and
+        // explosionDamageEnemy only exist on ParticlePrefabExplosion, the effect object the
+        // game instantiates at detonation, so they never matched anything on an item and item
+        // explosions were going off at full vanilla radius and damage. The one that did match,
+        // explosionForceMultiplier, lives on the ExplosionPreset ScriptableObject that every
+        // clone shares: two grenades shrunk at once compounded, and a grenade that detonated
+        // while shrunk destroyed itself without ever restoring it, so the asset stayed scaled
+        // for the rest of the session and every explosion in the game with it. Explosions are
+        // scaled at the Spawn callsite now, in ExplosionScalePatches, which is per-blast.
+        //
+        // The vehicle entries are the authored originals, not the live fields. ItemVehicle
+        // recomputes maxForwardSpeed / maxReverseSpeed / hyperMaxSpeed from those every
+        // physics step in ApplyTuningMultipliers, so writing the live ones lasted a frame.
+        // maxSpeedKmh and softMaxSpeedKmh are real caps with no per-frame rewrite.
+        // Scaling them is what stops a half-size vehicle driving at full speed on a tiny
+        // chassis (the source of the "shrunk vehicle is undrivable" feel).
         static readonly string[] _floatFieldsToScale = {
-            "explosionSize", "explosionForceMultiplier",
             "orbRadiusMultiplier",
             // ItemVehicle speed caps
             "maxSpeedKmh", "softMaxSpeedKmh",
-            "maxForwardSpeed", "maxReverseSpeed", "hyperMaxSpeed",
+            "originalMaxForwardSpeed", "originalMaxReverseSpeed", "originalHyperMaxSpeed",
             // ValuableArcticSnowBike forward speed
             "bikeForwardSpeed",
-        };
-        static readonly string[] _intFieldsToScale = {
-            "explosionDamage", "explosionDamageEnemy",
-        };
-        // ScriptableObject field names to follow (e.g. ItemGrenadeExplosive.explosionPreset -> ExplosionPreset)
-        static readonly string[] _soFieldNames = {
-            "explosionPreset",
         };
 
         /// <summary>
@@ -104,29 +110,11 @@ namespace ScalerCore.Handlers
             var scaledFields = new List<ScaledField>();
             float f = factor;
 
-            // Collect targets: all MonoBehaviours on this GO + any SOs they reference.
-            var targets = new List<object>();
-            foreach (var mb in ctrl.GetComponents<MonoBehaviour>())
+            // Components on this GameObject only. Never follow a reference off the object:
+            // anything shared (a ScriptableObject preset) belongs to every other clone too.
+            foreach (var target in ctrl.GetComponents<MonoBehaviour>())
             {
-                if (mb == null || mb == ctrl) continue;
-                targets.Add(mb);
-                // Follow SO references (e.g. explosionPreset on grenades).
-                var mbType = mb.GetType();
-                foreach (var soName in _soFieldNames)
-                {
-                    var soFi = mbType.GetField(soName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                    if (soFi == null) continue;
-                    var so = soFi.GetValue(mb);
-                    if (so != null)
-                    {
-                        targets.Add(so);
-                        Plugin.Log.LogDebug($"[SC]   following SO ref {mbType.Name}.{soName} -> {so.GetType().Name}");
-                    }
-                }
-            }
-
-            foreach (var target in targets)
-            {
+                if (target == null || target == ctrl) continue;
                 var type = target.GetType();
                 foreach (var name in _floatFieldsToScale)
                 {
@@ -136,16 +124,6 @@ namespace ScalerCore.Handlers
                     scaledFields.Add(new ScaledField { comp = target, field = fi, original = orig });
                     fi.SetValue(target, orig * f);
                     Plugin.Log.LogDebug($"[SC]   itemField {type.Name}.{name} {orig:F2} -> {orig * f:F2}");
-                }
-                foreach (var name in _intFieldsToScale)
-                {
-                    var fi = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                    if (fi == null || fi.FieldType != typeof(int)) continue;
-                    int orig = (int)fi.GetValue(target);
-                    int scaled = Mathf.RoundToInt(orig * f);
-                    scaledFields.Add(new ScaledField { comp = target, field = fi, original = orig });
-                    fi.SetValue(target, scaled);
-                    Plugin.Log.LogDebug($"[SC]   itemField {type.Name}.{name} {orig} -> {scaled}");
                 }
             }
 
@@ -166,11 +144,10 @@ namespace ScalerCore.Handlers
             if (scaledFields == null) return;
             foreach (var sf in scaledFields)
             {
+                // comp is a MonoBehaviour, not object, so this is Unity's overloaded ==
+                // and a destroyed component reads as null the way it should.
                 if (sf.comp == null) continue;
-                if (sf.field.FieldType == typeof(int))
-                    sf.field.SetValue(sf.comp, (int)sf.original);
-                else
-                    sf.field.SetValue(sf.comp, sf.original);
+                sf.field.SetValue(sf.comp, sf.original);
             }
         }
 
