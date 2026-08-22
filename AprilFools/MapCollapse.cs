@@ -14,6 +14,10 @@ namespace ScalerCore.AprilFools
     // Implementations call OnMapHit() to trigger; ScalerCore doesn't gate this.
     public class MapCollapse : MonoBehaviour
     {
+        // Resolved once: GetMask is a string lookup and the crush check runs every frame
+        // for the whole 90 seconds.
+        static readonly int LevelMask = LayerMask.GetMask("Default");
+
         const float Factor   = 0.02f;
         const float Duration = 90f;
 
@@ -47,6 +51,8 @@ namespace ScalerCore.AprilFools
         bool _lastBlinkOn;
         int _lastCountdown = -1, _lastTaxmanEmojiIdx = -1, _lastPanic1Idx = -1, _lastPanic2Idx = -1;
         float _origFogEnd, _origFogStart, _origFov;
+        // Restore runs on every level change; this says whether there is anything to undo.
+        bool _ran;
 
         void Awake() => _instance = this;
 
@@ -116,6 +122,7 @@ namespace ScalerCore.AprilFools
             _level = root?.Find("Level");
             if (_level == null) return;
 
+            _ran = true;
             _networkStart = networkStart;
             _origScale = _level.localScale;
             _pivot     = _level.position;
@@ -560,19 +567,20 @@ namespace ScalerCore.AprilFools
                     {
                         bool clipped = pc.transform.position.y < _pivot.y - 5f;
                         var crushCam = Camera.main;
-                        int levelMask = LayerMask.GetMask("Default");
                         // scale raycast distances by player size so shrunken players
-                        // aren't crushed prematurely by their already-small hitbox
-                        var playerCtrl = pc.GetComponent<ScaleController>();
-                        float playerScale = (playerCtrl != null && playerCtrl.IsScaled)
-                            ? playerCtrl.ScaleTarget != null
-                                ? playerCtrl.ScaleTarget.localScale.y / playerCtrl.OriginalScale.y
-                                : pc.transform.localScale.y
+                        // aren't crushed prematurely by their already-small hitbox.
+                        // The controller lives on the PlayerAvatar, which is a different
+                        // GameObject from PlayerController; asking the controller for it
+                        // found nothing and this guard did nothing.
+                        var playerCtrl = ScaleManager.GetController(pc.playerAvatar);
+                        float playerScale = (playerCtrl != null && playerCtrl.IsScaled
+                                             && playerCtrl.OriginalScale.y > 0f)
+                            ? playerCtrl._t.localScale.y / playerCtrl.OriginalScale.y
                             : 1f;
                         float upDist = 0.2f * Mathf.Max(playerScale, 0.1f);
                         float downDist = 0.3f * Mathf.Max(playerScale, 0.1f);
-                        bool ceilingClose = crushCam != null && Physics.Raycast(crushCam.transform.position, Vector3.up, upDist, levelMask);
-                        bool floorClose = crushCam != null && Physics.Raycast(crushCam.transform.position, Vector3.down, downDist, levelMask);
+                        bool ceilingClose = crushCam != null && Physics.Raycast(crushCam.transform.position, Vector3.up, upDist, LevelMask);
+                        bool floorClose = crushCam != null && Physics.Raycast(crushCam.transform.position, Vector3.down, downDist, LevelMask);
                         crushed = clipped || (ceilingClose && floorClose);
                     }
 
@@ -679,28 +687,32 @@ namespace ScalerCore.AprilFools
                 AssetManager.instance?.PhysImpactEffect(avatar.transform.position);
             }
 
-            // PlayerHealth.Hurt routes through HurtRPC. Host-only, otherwise every
-            // client runs the kill loop and the damage stacks on every player.
+            // Host-only, otherwise every client runs the kill loop and the damage stacks.
+            // It has to be HurtOther, not Hurt: Hurt returns immediately in multiplayer
+            // unless the health's own view is mine, so the host calling it on everybody
+            // killed nobody but the host, and with the lobby still alive the run never
+            // ended and the collapse never got cleaned up. HurtOther broadcasts and lets
+            // each owner apply it; Vector3.zero is the sentinel that skips the receiving
+            // side's 2m proximity check, and it falls back to Hurt in singleplayer.
             if (!SemiFunc.IsMasterClientOrSingleplayer()) yield break;
             foreach (var avatar in GetPlayers())
             {
                 if (avatar == null) continue;
                 var hp = avatar.GetComponent<PlayerHealth>();
-                if (hp != null && hp.health > 0) hp.Hurt(999, false);
+                if (hp != null && hp.health > 0) hp.HurtOther(999, Vector3.zero, false);
             }
         }
 
         void CrushEnemies()
         {
-            int levelMask = LayerMask.GetMask("Default");
             foreach (var (ep, _) in _enemyStates)
             {
                 if (ep == null || ep.Enemy == null) continue;
                 var hp = ep.GetComponentInChildren<EnemyHealth>();
                 if (hp == null || hp.healthCurrent <= 0) continue;
                 var pos = ep.transform.position;
-                bool ceiling = Physics.Raycast(pos, Vector3.up, 0.5f, levelMask);
-                bool floor = Physics.Raycast(pos, Vector3.down, 0.5f, levelMask);
+                bool ceiling = Physics.Raycast(pos, Vector3.up, 0.5f, LevelMask);
+                bool floor = Physics.Raycast(pos, Vector3.down, 0.5f, LevelMask);
                 if (ceiling && floor) hp.Hurt(9999, Vector3.down);
             }
         }
@@ -708,7 +720,7 @@ namespace ScalerCore.AprilFools
         void PulseLights(float p)
         {
             float period = Mathf.Lerp(4f, 1.5f, p);
-            bool on = (Time.time % period) < period * 0.4f;
+            bool on = (Clock % period) < period * 0.4f;
             float intensity = on ? 5f + p * 15f : 0.2f;
             foreach (var l in _lights)
             {
@@ -798,7 +810,7 @@ namespace ScalerCore.AprilFools
             if (cam != null)
                 cam.fieldOfView = Mathf.Lerp(_origFov, _origFov * 0.7f, p * p);
 
-            // glitches escalate: tiny → short → long
+            // glitches escalate: tiny -> short -> long
             if (t >= _nextGlitch && CameraGlitch.Instance != null)
             {
                 if (p < 0.4f)      { CameraGlitch.Instance.PlayTiny();  _nextGlitch = t + Mathf.Lerp(12f, 5f, p); }
@@ -851,6 +863,12 @@ namespace ScalerCore.AprilFools
 
         void Restore()
         {
+            // Wired to every ChangeLevel, so it runs on every truck-to-level and
+            // level-to-shop transition of every run whether or not any of this happened.
+            // Without the guard it puts a captured-from-nothing FOV of 0 on the camera and
+            // re-applies the last collapse's fog to whatever scene is current.
+            if (!_ran) return;
+            _ran = false;
             _shrinking = _shrunken = false;
             StopAllCoroutines();
             _routine = null;
@@ -876,8 +894,13 @@ namespace ScalerCore.AprilFools
                 RenderSettings.fogEndDistance = _origFogEnd;
                 RenderSettings.fogStartDistance = _origFogStart;
             }
-            var cam = Camera.main;
-            if (cam != null) cam.fieldOfView = _origFov;
+            if (_origFov > 0f)
+            {
+                var cam = Camera.main;
+                if (cam != null) cam.fieldOfView = _origFov;
+            }
+            _origFogEnd = _origFogStart = _origFov = 0f;
+            _level = null;
 
             if (TruckScreenText.instance?.background != null)
                 TruckScreenText.instance.background.color = TruckScreenText.instance.mainBackgroundColor;
