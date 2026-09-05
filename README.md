@@ -2,6 +2,10 @@
 
 A scaling library for [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/) modders. Handles the hard parts of scaling game objects -- physics, audio, animation, colliders, NavMesh, multiplayer sync -- so you don't have to.
 
+> **A note from Vippy**
+>
+> After way too long of a break, I'm finally back and working on these again :D Every one of my mods just got a full pass: bugs fixed, reports read, a few things I'd always meant to do. New builds and fixes land in [Vippy's Discord](https://discord.gg/kKqhck2NrP) before they hit Thunderstore, so come hang out. Thanks for sticking around.
+
 > **v1.0.0: the API is stable.** Growth is a first-class direction now, not just shrinking: enemies, players, and props grow as well as shrink, with the audio, reach, mass, and physics that sells the size. Grown enemies cap their physical footprint so they still fit the level, voices pitch with an intelligibility floor, and grown players hold items at arm's length. The public surface (`ScaleManager`, `ScaleOptions`, `IScaleHandler`) is stable for the 1.x line.
 
 If you're building a mod that changes the size of things (shrink rays, growth potions, whatever), ScalerCore gives you a clean API and takes care of the edge cases.
@@ -279,13 +283,22 @@ For all types:
 
 [ShrinkerGun: COMPRESSOR](https://github.com/VirtualPixel/ShrinkerGun-COMPRESSOR) is a shrink ray gun built on ScalerCore. Shows how to build `ScaleOptions`, call `Apply`, and handle per-target-type durations.
 
-## Contact
+## Come hang out
 
-| Purpose | Where |
+I'm Vippy. I make R.E.P.O. mods and I read every bug report.
+
+| | |
 |---|---|
-| Bug reports and suggestions | [GitHub Issues](https://github.com/VirtualPixel/ScalerCore/issues) |
-| Questions, test builds, or just hanging out | [Vippy's Discord](https://discord.gg/kKqhck2NrP) |
-| R.E.P.O. modding in general | [R.E.P.O. Modding Server](https://discord.gg/9fDzZ9sk95) |
+| **[Vippy's Discord](https://discord.gg/kKqhck2NrP)** | Test builds land here before Thunderstore, you get a say in what comes next, and it's the fastest way to get a bug fixed. Come say hi. |
+| **[GitHub Issues](https://github.com/VirtualPixel/ScalerCore/issues)** | Bug reports and ideas that deserve a paper trail. |
+| **[R.E.P.O. Modding Server](https://discord.gg/9fDzZ9sk95)** | The whole modding scene, not just me. |
+| **[More of my mods](https://thunderstore.io/c/repo/p/Vippy/)** | Everything else I've made for R.E.P.O. |
 
-Everything I make stays free. If one of these mods made your runs better and you feel like
-saying thanks, there is a [Ko-fi](https://ko-fi.com/vippydev).
+## Keep the mods coming
+
+Everything I make is free and stays free. Two ways to help if you feel like it, neither one expected:
+
+- **[Ko-fi](https://ko-fi.com/vippydev)**: buy me a coffee and your name goes on the supporters list in my Discord. Every coffee buys another evening on the next update.
+- **[BisectHosting](https://bisecthosting.com/vippy)**: hosting a server for Minecraft or anything else your crew plays? Code `vippy` takes 25% off, and I get a cut at no cost to you. It's where my own servers live.
+
+[![25% off BisectHosting servers with code vippy](https://www.bisecthosting.com/partners/custom-banners/71eecea6-f5bb-437d-ac56-f6fee4266193.png)](https://bisecthosting.com/vippy)
