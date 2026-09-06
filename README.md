@@ -21,7 +21,7 @@ If you're building a mod that changes the size of things (shrink rays, growth po
 Reference the API at compile time via NuGet (runtime stays on Thunderstore, so exclude it from your output to avoid double-loading the DLL):
 
 ```xml
-<PackageReference Include="ScalerCore" Version="1.0.5" ExcludeAssets="runtime" PrivateAssets="all" />
+<PackageReference Include="ScalerCore" Version="1.0.6" ExcludeAssets="runtime" PrivateAssets="all" />
 ```
 
 Then declare the runtime dependency: add `Vippy-ScalerCore-<version>` to your Thunderstore `manifest.json`, and a hard dependency in your plugin:

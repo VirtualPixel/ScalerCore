@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.6
+
+### Fixed
+- The map collapse warning lights blink at the speed they were meant to, somewhere between every four seconds at the start and every second and a half at the end, instead of strobing. The blink took the clock reading modulo a period that shrinks every frame, and on a clock that has been counting for a while (Photon's server time in a lobby, or the game's own clock half an hour in) that jumps hundreds of seconds a frame, so every light in the level flickered at frame rate and the siren restarted on each false edge. That is the "lights and sounds going way too fast" collapse, and it was a photosensitivity hazard. The blink now runs off the collapse's own elapsed time, so it is smooth, identical on every machine, and has a regression test walking the whole collapse at 60 fps.
+
+### Internal
+- No API changes. Mods built against 1.0.4 or 1.0.5 need nothing.
+
 ## 1.0.5
 
 ### Fixed
