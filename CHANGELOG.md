@@ -4,9 +4,13 @@
 
 ### Fixed
 - The map collapse warning lights blink at the speed they were meant to, somewhere between every four seconds at the start and every second and a half at the end, instead of strobing. The blink took the clock reading modulo a period that shrinks every frame, and on a clock that has been counting for a while (Photon's server time in a lobby, or the game's own clock half an hour in) that jumps hundreds of seconds a frame, so every light in the level flickered at frame rate and the siren restarted on each false edge. That is the "lights and sounds going way too fast" collapse, and it was a photosensitivity hazard. The blink now runs off the collapse's own elapsed time, so it is smooth, identical on every machine, and has a regression test walking the whole collapse at 60 fps.
+- The map collapse now shrinks the level for everyone, not just the host. Three things on the client side, all in one go. The level-change cleanup was hung off a game method that a non-host returns out of on its first line, and the cleanup ran anyway, so anything on a client that poked that method mid-level restored the level to full size on that machine while the host kept collapsing, which is where players standing inside walls and outside the map came from. It now checks the same condition the game does before touching anything, on top of the real per-client cleanup that already rode the level-change message. The host also re-sends the collapse anchor every five seconds while it runs, so a client that missed the start (level not finished loading on their side, or the message lost) picks it up at the right point instead of never. And the level root is taken from the game's own field for it rather than found by name.
+- A collapse effect failing on one machine no longer stops the collapse there. The lights, audio, camera and chat extras run guarded now; if one throws, it is logged once with the stack and the level keeps shrinking.
+- Every machine logs the collapse start, buildup, end and restore, with the shared clock values, so a report from a lobby says exactly where a client stopped.
 
 ### Internal
 - No API changes. Mods built against 1.0.4 or 1.0.5 need nothing.
+- `ScalerCore.Tests` covers the collapse blink and the level-change gate.
 
 ## 1.0.5
 
