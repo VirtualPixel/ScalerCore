@@ -510,9 +510,13 @@ namespace ScalerCore.AprilFools
             var to   = _origScale * Factor;
             float t = Mathf.Max(0f, Elapsed() - 10f), nextBeep = 2f, nextDestroy = 1f;
             int totalToDestroy = Mathf.Max(pendingHinges.Count, pendingObjects.Count);
-            float destroyInterval = totalToDestroy > 0 ? (Duration * 0.8f) / totalToDestroy : 2f;
-            destroyInterval = Mathf.Clamp(destroyInterval, 0.2f, 3f);
+            // Clear the loose objects before the room gets small: hundreds of bodies squeezed
+            // into a few metres is a contact-solver pile-up, which is the frame drop people saw
+            // at the end. Everything is queued to be gone by 60% and the rest is frozen at 80%.
+            float destroyInterval = totalToDestroy > 0 ? (Duration * 0.6f) / totalToDestroy : 2f;
+            destroyInterval = Mathf.Clamp(destroyInterval, 0.08f, 3f);
             bool killed = false;
+            bool frozen = false;
 
             while (t < Duration && _shrinking)
             {
@@ -521,12 +525,22 @@ namespace ScalerCore.AprilFools
                 float p = Mathf.Clamp01(t / Duration);
                 float ease = p * p;
 
+                // The level's mesh colliders are re-cooked on every scale write. Every other frame
+                // is plenty for a change this small per frame and halves that cost.
                 var prev = _level.localScale;
                 var next = Vector3.Lerp(from, to, ease);
-                _level.localScale = next;
+                if ((Time.frameCount & 1) == 0 || t >= Duration)
+                {
+                    _level.localScale = next;
+                    if (prev.x > 0.001f)
+                        Guarded("TrackObjects", () => TrackObjects(next.x / prev.x));
+                }
 
-                if (prev.x > 0.001f)
-                    Guarded("TrackObjects", () => TrackObjects(next.x / prev.x));
+                if (p >= 0.8f && !frozen)
+                {
+                    frozen = true;
+                    Guarded("FreezeDetached", FreezeDetached);
+                }
 
                 float beepNext = nextBeep;
                 Guarded("effects", () =>
@@ -560,7 +574,7 @@ namespace ScalerCore.AprilFools
                 {
                     nextDestroy = t + destroyInterval;
                     // ramp batch size to clear physics objects before crush
-                    int batch = p < 0.5f ? 1 : p < 0.75f ? 2 : 3;
+                    int batch = p < 0.5f ? 2 : p < 0.75f ? 3 : 4;
                     for (int d = 0; d < batch; d++)
                     {
                         if (pendingHinges.Count > 0)
@@ -878,6 +892,21 @@ namespace ScalerCore.AprilFools
             return _cachedPlayers;
         }
 
+        // Past 80% whatever loose body is left stops colliding: it still rides the shrink with
+        // TrackObjects, it just no longer generates contacts against the hundred others in the
+        // same square metre. Restore puts them back.
+        void FreezeDetached()
+        {
+            foreach (var (tr, _) in _detached)
+            {
+                if (tr == null) continue;
+                var rb = tr.GetComponent<Rigidbody>();
+                if (rb == null) continue;
+                rb.isKinematic = true;
+                rb.detectCollisions = false;
+            }
+        }
+
         void TrackObjects(float ratio)
         {
             foreach (var av in GetPlayers())
@@ -913,7 +942,16 @@ namespace ScalerCore.AprilFools
             if (_level != null) _level.localScale = _origScale;
 
             foreach (var (t, par) in _detached)
-                if (t != null && par != null) t.SetParent(par, true);
+            {
+                if (t == null) continue;
+                var rb = t.GetComponent<Rigidbody>();
+                if (rb != null && !rb.detectCollisions)
+                {
+                    rb.detectCollisions = true;
+                    rb.isKinematic = false;
+                }
+                if (par != null) t.SetParent(par, true);
+            }
             _detached.Clear();
 
             foreach (var (a, spd) in _enemySpeeds) if (a != null) a.speed = spd;

@@ -7,6 +7,9 @@
 - An object in someone's hand, an inventory slot or a seat is not swapped under them: it scales on the spot over the RPC as before, and the respawn happens the moment it is free.
 - `ScaleManager.NativeSync` (default on) and `ScaleManager.NativeSyncWhileHeld` (default on) for consuming mods. A `scalercore_nativesync_off` file in BepInEx/config turns it off for a session. A respawn replaces the GameObject, so a mod that keeps a controller reference across an Apply should re-resolve it with `ScaleManager.GetController`.
 
+### Fixed
+- The frame drop at the end of the map collapse. Hundreds of loose objects squeezed into a few metres were a contact-solver pile-up. The destroy queue now clears them by 60% of the collapse, whatever is left stops generating contacts at 80% (it still rides the shrink), and the level's own scale, which re-cooks every mesh collider on each write, is written every other frame.
+
 ### Internal
 - No API removals or signature changes. Mods built against 1.0.4, 1.0.5 or 1.0.6 need nothing.
 - The session options that ride the shrink RPC have a codec of their own now, shared with the respawn data.
