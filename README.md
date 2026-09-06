@@ -21,7 +21,7 @@ If you're building a mod that changes the size of things (shrink rays, growth po
 Reference the API at compile time via NuGet (runtime stays on Thunderstore, so exclude it from your output to avoid double-loading the DLL):
 
 ```xml
-<PackageReference Include="ScalerCore" Version="1.0.6" ExcludeAssets="runtime" PrivateAssets="all" />
+<PackageReference Include="ScalerCore" Version="1.1.0" ExcludeAssets="runtime" PrivateAssets="all" />
 ```
 
 Then declare the runtime dependency: add `Vippy-ScalerCore-<version>` to your Thunderstore `manifest.json`, and a hard dependency in your plugin:
@@ -282,6 +282,10 @@ For all types:
 ## Reference Implementation
 
 [ShrinkerGun: COMPRESSOR](https://github.com/VirtualPixel/ShrinkerGun-COMPRESSOR) is a shrink ray gun built on ScalerCore. Shows how to build `ScaleOptions`, call `Apply`, and handle per-target-type durations.
+
+## Players without the mod
+
+Since 1.1.0 a scaled item, valuable, cart or vehicle is respawned through the game's own network instantiate with the scale in its instantiation data, and the game applies that on every client, modded or not. So a lobby where only the host runs ScalerCore still sees shrunken loot and carts at the right size with the right colliders. Players and enemies still need the mod on every machine to scale. Something held, pocketed or driven scales for modded players immediately and respawns for everyone the moment it is set down. To switch the respawn off for a session, put an empty file named `scalercore_nativesync_off` in `BepInEx/config`; a mod can set `ScaleManager.NativeSync = false` instead.
 
 ## Come hang out
 

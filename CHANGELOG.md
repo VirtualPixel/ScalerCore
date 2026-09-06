@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0
+
+### New
+- Scaled objects show up right for players who do not have ScalerCore. Items, valuables, carts, vehicles and cosmetic boxes are scaled by respawning them through the game's own network instantiate with the scale in the instantiation data, which the game applies on every client whether or not it runs the mod. An unmodded client gets the object at its real size with the right colliders, instead of a full-size body shaking against the host's small one and walking through walls, which is what a shrunken cart or the contents of a shrink cart looked like to them. On a client with ScalerCore nothing looks different: the clone reads the rest of the data and runs the usual session, animation in, audio, mass, pocketing, timers, late joiners included. Players, enemies and doors have no prefab to respawn from and stay on the shrink RPC as before.
+- An object in someone's hand, an inventory slot or a seat is not swapped under them: it scales on the spot over the RPC as before, and the respawn happens the moment it is free.
+- `ScaleManager.NativeSync` (default on) and `ScaleManager.NativeSyncWhileHeld` (default on) for consuming mods. A `scalercore_nativesync_off` file in BepInEx/config turns it off for a session. A respawn replaces the GameObject, so a mod that keeps a controller reference across an Apply should re-resolve it with `ScaleManager.GetController`.
+
+### Internal
+- No API removals or signature changes. Mods built against 1.0.4, 1.0.5 or 1.0.6 need nothing.
+- The session options that ride the shrink RPC have a codec of their own now, shared with the respawn data.
+- `ScalerCore.Tests` covers the respawn data round trip, the old-host short arrays, the prefab path off a clone name, and the respawn decision table.
+
 ## 1.0.6
 
 ### Fixed
