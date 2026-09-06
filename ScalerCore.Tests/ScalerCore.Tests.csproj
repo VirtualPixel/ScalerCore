@@ -15,6 +15,7 @@
   <ItemGroup>
     <Compile Include="../Handlers/EnemyVisuals/GroundingTrack.cs" />
     <Compile Include="../Utilities/RingTap.cs" />
+    <Compile Include="../Utilities/CollapseBlink.cs" />
   </ItemGroup>
 
   <ItemGroup>

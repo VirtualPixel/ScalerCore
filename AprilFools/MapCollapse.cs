@@ -5,6 +5,7 @@ using Photon.Pun;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Audio;
+using ScalerCore.Utilities;
 
 namespace ScalerCore.AprilFools
 {
@@ -130,6 +131,7 @@ namespace ScalerCore.AprilFools
             _nextMsg = 0f;
             _nextTaxmanEmoji = 5f;
             _lastCountdown = _lastTaxmanEmojiIdx = _lastPanic1Idx = _lastPanic2Idx = -1;
+            _lastBlinkOn = false;
 
             if (_routine != null) StopCoroutine(_routine);
             _routine = StartCoroutine(Run());
@@ -501,7 +503,7 @@ namespace ScalerCore.AprilFools
                 if (prev.x > 0.001f)
                     TrackObjects(next.x / prev.x);
 
-                PulseLights(p);
+                PulseLights(t, p);
                 PitchAlarms(p);
                 Beep(ref nextBeep, t, p);
                 Shake(t, p);
@@ -717,10 +719,13 @@ namespace ScalerCore.AprilFools
             }
         }
 
-        void PulseLights(float p)
+        void PulseLights(float t, float p)
         {
-            float period = Mathf.Lerp(4f, 1.5f, p);
-            bool on = (Clock % period) < period * 0.4f;
+            // Phase from the collapse's own elapsed time. A clock reading modulo a period
+            // that changes every frame jumps by floor(clock / period) times the change,
+            // which on Photon's server time is hundreds of seconds a frame: every light in
+            // the level flickered at frame rate and the siren restarted on each false edge.
+            bool on = CollapseBlink.IsOn(t, Duration);
             float intensity = on ? 5f + p * 15f : 0.2f;
             foreach (var l in _lights)
             {
