@@ -17,6 +17,10 @@
     <Compile Include="../Utilities/RingTap.cs" />
     <Compile Include="../Utilities/CollapseBlink.cs" />
     <Compile Include="../Utilities/LevelChangeGate.cs" />
+    <Compile Include="../ScaleOptions.cs" />
+    <Compile Include="../Utilities/ScaleOptionsCodec.cs" />
+    <Compile Include="../Utilities/NativeScaleData.cs" />
+    <Compile Include="../Utilities/RespawnRules.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -19,6 +19,25 @@ namespace ScalerCore
         public static bool AllowDeadHeads { get; set; }
 
         /// <summary>
+        /// Scale resting items, valuables, carts and vehicles by respawning them through the
+        /// game's own network instantiate with the scale in the instantiation data, which the
+        /// game applies on every client whether or not it runs ScalerCore. Players without the
+        /// mod see the object at its real size with the right colliders instead of a full-size
+        /// body shaking against the host's small one. Players and enemies stay on the RPC path.
+        /// A respawn replaces the GameObject: re-resolve with <see cref="GetController"/> after
+        /// an Apply if you keep a reference. On by default; a consuming mod can turn it off, and
+        /// a scalercore_nativesync_off file in BepInEx/config turns it off for a session.
+        /// </summary>
+        public static bool NativeSync { get; set; } = true;
+
+        /// <summary>
+        /// With <see cref="NativeSync"/>, an object in a hand, an inventory slot or a seat is
+        /// scaled on the spot over the RPC and respawned the moment it is free. Off keeps such
+        /// objects on the RPC path for good.
+        /// </summary>
+        public static bool NativeSyncWhileHeld { get; set; } = true;
+
+        /// <summary>
         /// Scale an object using the provided options.
         /// Gets existing ScaleController or returns if none attached.
         /// Skips the target if its handler type is not included in <see cref="ScaleOptions.AllowedTargets"/>,

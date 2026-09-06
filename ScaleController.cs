@@ -117,12 +117,47 @@ namespace ScalerCore
         // Sound pitch control, instance manages per-entity pitch state.
         internal AudioPitchHelper _audioPitch = new();
 
+        // Native respawn (see NativeRespawn). _native: this object spawned with ScalerCore's
+        // instantiation data, so its scale is already on the transform on every machine and the
+        // session below is rebuilt from that data instead of an RPC. _nativeDeferred: the host
+        // scaled this over the RPC because it was in someone's hands and will respawn it natively
+        // once it is free. _prefabPath caches the resolve ("" = none).
+        internal bool _native;
+        bool _nativeApplied;
+        object[]? _nativeData;
+        internal bool _nativeDeferred;
+        float _nextDeferredCheck;
+        internal string? _prefabPath;
+
+        internal bool InInventory => IsItemInInventory();
+
         void Awake()
         {
             _t            = transform;
             OriginalScale = transform.localScale;
             _target       = OriginalScale;
             _animScale    = OriginalScale;
+
+            // A native respawn: the game already put the scaled size on the transform from the
+            // instantiation data, so the original comes from the data too. The session state is
+            // marked now (IsScaled, options) so a same-frame Apply from a cart mod sees a scaled
+            // object and does not start a second respawn; the rest of the session is built in
+            // EnsureInitialized once the handler and rigidbody are resolved.
+            var ownPv = GetComponent<PhotonView>();
+            if (ownPv != null && NativeScaleData.TryUnpack(ownPv.InstantiationData, out var orig, out _, out _, out var nOpts, out var nFlags))
+            {
+                _native = true;
+                _nativeData = ownPv.InstantiationData;
+                OriginalScale = new Vector3(orig[0], orig[1], orig[2]);
+                _target = _t.localScale;
+                _animScale = _t.localScale;
+                _options = ScaleOptionsCodec.Unpack(nOpts, nFlags, ScaleOptions.Default);
+                if (!Mathf.Approximately(_options.Factor, 1f))
+                {
+                    IsScaled = true;
+                    Scaled.Add(this);
+                }
+            }
 
             // Register with PUN's RPC routing cache now, at attach time, so a shrink RPC that
             // arrives in the same network pass the object instantiates can route to this freshly
@@ -233,6 +268,61 @@ namespace ScalerCore
             // finds both. RefreshRpcMonoBehaviourCache makes PUN2 include this ScaleController
             // (just AddComponent'd, so not in the original cache) when routing incoming RPCs.
             EnsureNetworkPV();
+
+            if (_native && !_nativeApplied)
+            {
+                _nativeApplied = true;
+                ApplyNative();
+            }
+        }
+
+        // The session of a natively respawned object, from its instantiation data. Runs on every
+        // machine with ScalerCore, host included. The transform is already at the target size, so
+        // the animation starts from the size the clone replaced (the original for a fresh shrink,
+        // the small size for a restore) and settles where the game put it.
+        void ApplyNative()
+        {
+            if (!NativeScaleData.TryUnpack(_nativeData, out _, out float fromFactor, out float remaining, out _, out _)) return;
+            float f = _options.Factor;
+            Vector3 target = OriginalScale * f;
+            Vector3 from = OriginalScale * (fromFactor > 0f ? fromFactor : f);
+            bool isHost = SemiFunc.IsMasterClientOrSingleplayer();
+            Plugin.Log.LogDebug($"[SC] native session {_displayName}  factor={f}  from=x{fromFactor}  host={isHost}  remaining={remaining:F1}");
+            _t.localScale = from;
+            _animScale = from;
+            if (!IsScaled)
+            {
+                // A restore respawn: back to the original with the usual expand look.
+                _currentAnimSpeed = ResolveExpandSpeed();
+                ApplyScale(OriginalScale);
+                SetForceGrabPoint(true);
+                PlayImpactEffect();
+                PlayCameraShake();
+                return;
+            }
+            _invertedActive = _options.InvertedMode;
+            _currentAnimSpeed = _options.Speed;
+            ApplySessionLocal(target);
+            if (isHost)
+            {
+                _shrinkTimer = remaining > 0f ? remaining : 0f;
+                float animDist  = (from - target).magnitude;
+                float animSpeed = _options.Speed * OriginalScale.magnitude;
+                float animTime  = animSpeed > 0f ? (animDist / animSpeed) * 1.1f : 0.75f;
+                _bonkImmuneTimer = Mathf.Max(animTime, _options.BonkImmuneDuration);
+            }
+        }
+
+        // Host only: an object scaled over the RPC while it was held gets its native respawn the
+        // moment it is out of everyone's hands, at the size it already is on modded clients.
+        void TickDeferredRespawn()
+        {
+            if (!_nativeDeferred || !IsScaled || Time.unscaledTime < _nextDeferredCheck) return;
+            _nextDeferredCheck = Time.unscaledTime + 0.25f;
+            if (_transitioning) return;
+            if (NativeRespawn.Decide(this) != RespawnRules.Verdict.Now) return;
+            _nativeDeferred = false;
+            NativeRespawn.Swap(this, _target, _options, _shrinkTimer, _options.Factor);
         }
 
         void Update()
@@ -255,6 +345,8 @@ namespace ScalerCore
                 // Handler per-frame logic (enemy mass enforcement, valuable value tracking, item orb, etc.)
                 if (IsScaled && Handler != null)
                     Handler.OnUpdate(this);
+
+                TickDeferredRespawn();
             }
 
             // Player handler runs on all clients (grab stats, voice pitch, etc.).
@@ -503,6 +595,22 @@ namespace ScalerCore
             }
 
             Plugin.Log.LogDebug($"[SC] DispatchShrink ENTER  {_displayName}  instanceID={GetInstanceID()}  IsScaled={IsScaled}  currentScale={_t.localScale}  GO={gameObject.name}");
+
+            // Same factor on a scaled object is the toggle, handled below. Anything else that
+            // can go out as a native respawn does; the RPC path is the fallback.
+            if (!(IsScaled && Mathf.Approximately(options.Factor, _options.Factor)))
+            {
+                if (options.Factor <= 0f) options.Factor = ScaleOptions.Default.Factor;
+                if (options.Speed  <= 0f) options.Speed  = ScaleOptions.Default.Speed;
+                var verdict = NativeRespawn.Decide(this);
+                if (verdict == RespawnRules.Verdict.Now)
+                {
+                    float fromFactor = IsScaled ? _options.Factor : 1f;
+                    if (NativeRespawn.Swap(this, OriginalScale * options.Factor, options, options.Duration, fromFactor))
+                        return;
+                }
+                _nativeDeferred = verdict == RespawnRules.Verdict.WhenFree;
+            }
             // Hitch tracing: the whole apply runs in one frame, so if it ever
             // costs real milliseconds the player sees a freeze-frame. Warn with
             // the object name so slow targets can be reported and broken down
@@ -673,6 +781,7 @@ namespace ScalerCore
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             if (!IsScaled) return;
             EnsureInitialized();
+            if (TryNativeRestore()) return;
             IsScaled = false;
             Scaled.Remove(this);
 
@@ -717,6 +826,7 @@ namespace ScalerCore
                 Plugin.Log.LogDebug($"[SC] BONK BLOCKED {_displayName}  immune={_bonkImmuneTimer:F2}s remaining");
                 return;
             }
+            if (TryNativeRestore()) return;
             IsScaled = false;
             _shrinkTimer = 0f;
             Scaled.Remove(this);
@@ -751,6 +861,22 @@ namespace ScalerCore
             ScaleMapIcon(1f);
         }
 
+
+        // A restore that goes out as a plain respawn: the clone spawns at the original size on
+        // every machine, and modded ones animate it up from the small size. Held objects expand
+        // over the RPC now and respawn plain when free.
+        bool TryNativeRestore()
+        {
+            var verdict = NativeRespawn.Decide(this);
+            if (verdict == RespawnRules.Verdict.Now)
+            {
+                var plain = _options;
+                plain.Factor = 1f;
+                if (NativeRespawn.Swap(this, OriginalScale, plain, 0f, _options.Factor)) return true;
+            }
+            _nativeDeferred = verdict == RespawnRules.Verdict.WhenFree;
+            return false;
+        }
 
         void ApplyScale(Vector3 target)
         {
@@ -870,21 +996,8 @@ namespace ScalerCore
         // These run on non-host clients. They mirror the host's IsScaled/Scaled state so
         // pitch and any client-side logic that checks IsScaled work correctly.
 
-        float[] PackOpts() => new[] {
-            _options.Factor, _options.Speed, _options.MassCap,
-            _options.SpeedFactor, _options.AnimSpeedMultiplier,
-            _options.FootstepPitchMultiplier, _options.BonkImmuneDuration,
-            _options.RestoreSpeed, _options.AudioPresence,
-            _options.EnemyPhysicalFactorCap,
-            _options.EnemyWidthFactorCap, _options.EnemyNavRadiusFactorCap,
-            _options.EnemyHeightFactorCap
-        };
-
-        bool[] PackBools() => new[] {
-            _options.PreserveMass, _options.InvertedMode, _options.SuppressImpactFlash,
-            _options.SuppressVoicePitch, _options.IgnoreBonkExpand, _options.RejectExternalApply,
-            _options.SuppressCameraShake
-        };
+        float[] PackOpts() => ScaleOptionsCodec.PackFloats(_options);
+        bool[] PackBools() => ScaleOptionsCodec.PackBools(_options);
 
         [PunRPC]
         void RPC_Shrink(Vector3 target, float[] opts, bool[] flags, PhotonMessageInfo info = default)
@@ -906,32 +1019,20 @@ namespace ScalerCore
 
         void ApplyRemoteShrink(Vector3 target, float[] opts, bool[] flags)
         {
-            Plugin.Log.LogDebug($"[SC] RPC_Shrink RECV  {_displayName}  target={target}  factor={opts[0]}  speed={opts[1]}  handler={Handler?.GetType().Name ?? "null"}");
-            _options.Factor                = opts[0];
-            _options.Speed                 = opts[1];
-            _options.MassCap               = opts[2];
-            _options.SpeedFactor           = opts[3];
-            _options.AnimSpeedMultiplier   = opts[4];
-            _options.FootstepPitchMultiplier = opts[5];
-            _options.BonkImmuneDuration    = opts[6];
-            // Slots 7+ added later. Length-guarded so old hosts can drive new clients.
-            _options.RestoreSpeed          = opts.Length > 7 ? opts[7] : 0f;
-            _options.AudioPresence         = opts.Length > 8 ? opts[8] : 1f;
-            _options.EnemyPhysicalFactorCap = opts.Length > 9 ? opts[9] : 0f;
-            _options.EnemyWidthFactorCap     = opts.Length > 10 ? opts[10] : 0f;
-            _options.EnemyNavRadiusFactorCap = opts.Length > 11 ? opts[11] : 0f;
-            _options.EnemyHeightFactorCap    = opts.Length > 12 ? opts[12] : 0f;
-            _options.PreserveMass          = flags[0];
-            _options.InvertedMode          = flags[1];
-            _options.SuppressImpactFlash   = flags.Length > 2 && flags[2];
-            _options.SuppressVoicePitch    = flags.Length > 3 && flags[3];
-            _options.IgnoreBonkExpand      = flags.Length > 4 && flags[4];
-            _options.RejectExternalApply   = flags.Length > 5 && flags[5];
-            _options.SuppressCameraShake   = flags.Length > 6 && flags[6];
-            _invertedActive = flags[1];
+            Plugin.Log.LogDebug($"[SC] RPC_Shrink RECV  {_displayName}  target={target}  factor={(opts.Length > 0 ? opts[0] : 0f)}  handler={Handler?.GetType().Name ?? "null"}");
+            _options = ScaleOptionsCodec.Unpack(opts, flags, _options);
+            _invertedActive = _options.InvertedMode;
+            _currentAnimSpeed = _options.Speed;
+            ApplySessionLocal(target);
+        }
+
+        // Everything a scaled session does on this machine apart from deciding it: mass, the
+        // extraction box, the grab point, the animation to the target, audio, item fields, the
+        // handler's own work, the map icon. Shared by the shrink RPC and the native respawn.
+        void ApplySessionLocal(Vector3 target)
+        {
             float f = _options.Factor;
             IsScaled = true;
-            _currentAnimSpeed = _options.Speed;
             Scaled.Add(this);
             if (_rb != null && !_isItem && !_options.PreserveMass) _rb.mass = Mathf.Clamp(_originalMass * f, 0.5f, _options.MassCap);
             ScalePgoMassOriginal(f);
@@ -1180,6 +1281,8 @@ namespace ScalerCore
 
             if (!IsScaled) return;
             if (_networkPV == null) return;
+            // A native respawn reaches a late joiner through Photon's own buffered instantiate.
+            if (_native) return;
             _networkPV.RPC(nameof(RPC_Shrink), newPlayer, _target, PackOpts(), PackBools());
         }
     }

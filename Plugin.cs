@@ -38,6 +38,13 @@ namespace ScalerCore
             // assembly check happens here instead of stalling the first in-game scale.
             Compat.RepoXRBridge.Warm();
 
+            // Session kill switch for the native respawn, for a lobby where it misbehaves.
+            if (System.IO.File.Exists(System.IO.Path.Combine(Paths.ConfigPath, "scalercore_nativesync_off")))
+            {
+                ScaleManager.NativeSync = false;
+                Log.LogInfo("[SC] native sync off for this session (scalercore_nativesync_off in BepInEx/config)");
+            }
+
             gameObject.AddComponent<AprilFools.MapCollapse>();
             if (DebugDraw) gameObject.AddComponent<ExtractionVolumeDebug>();
         }
