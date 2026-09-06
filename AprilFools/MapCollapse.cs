@@ -54,6 +54,21 @@ namespace ScalerCore.AprilFools
         float _origFogEnd, _origFogStart, _origFov;
         // Restore runs on every level change; this says whether there is anything to undo.
         bool _ran;
+        // The per-frame extras (lights, audio, camera, chat) are guarded so one of them
+        // throwing on some machine cannot kill the coroutine and leave that client with
+        // a full-size level. Logged once per collapse, with the stack.
+        bool _cosmeticFault;
+
+        void Guarded(string what, System.Action act)
+        {
+            try { act(); }
+            catch (System.Exception e)
+            {
+                if (_cosmeticFault) return;
+                _cosmeticFault = true;
+                Plugin.Log.LogError($"[MapCollapse] {what} threw, collapse keeps going without it: {e}");
+            }
+        }
 
         void Awake() => _instance = this;
 
@@ -119,9 +134,18 @@ namespace ScalerCore.AprilFools
 
         void Begin(double networkStart)
         {
-            var root = LevelGenerator.Instance.transform.parent;
-            _level = root?.Find("Level");
-            if (_level == null) return;
+            // The game parents every module, start room and connect object under
+            // LevelParent on every machine (Module.Start, StartRoom.Start), so that is the
+            // thing to scale. The name lookup stays as a fallback only.
+            var lp = LevelGenerator.Instance.LevelParent;
+            _level = lp != null ? lp.transform : LevelGenerator.Instance.transform.parent?.Find("Level");
+            if (_level == null)
+            {
+                Plugin.Log.LogWarning("[MapCollapse] no level root to scale, collapse skipped on this machine");
+                return;
+            }
+            Plugin.Log.LogInfo($"[MapCollapse] begin on {(SemiFunc.IsMasterClientOrSingleplayer() ? "host" : "client")}, anchor {networkStart:F2}, now {Clock:F2}, root '{_level.name}' with {_level.childCount} children");
+            _cosmeticFault = false;
 
             _ran = true;
             _networkStart = networkStart;
@@ -452,9 +476,10 @@ namespace ScalerCore.AprilFools
             }
             if (!_shrinking) yield break;
 
-            DetachPhysObjects();
-            SetupLightsAndSound();
-            PanicEnemies();
+            Plugin.Log.LogInfo($"[MapCollapse] buildup done at {Elapsed():F1}s, shrinking from {_level!.localScale.x:F3}");
+            Guarded("DetachPhysObjects", DetachPhysObjects);
+            Guarded("SetupLightsAndSound", SetupLightsAndSound);
+            Guarded("PanicEnemies", PanicEnemies);
 
             // let players send the truck: set completed count without triggering
             // the extraction state machines (which play tube/slam sounds).
@@ -501,30 +526,35 @@ namespace ScalerCore.AprilFools
                 _level.localScale = next;
 
                 if (prev.x > 0.001f)
-                    TrackObjects(next.x / prev.x);
+                    Guarded("TrackObjects", () => TrackObjects(next.x / prev.x));
 
-                PulseLights(t, p);
-                PitchAlarms(p);
-                Beep(ref nextBeep, t, p);
-                Shake(t, p);
-                Visuals(t, p);
-
-                if (TruckScreenText.instance?.background != null)
+                float beepNext = nextBeep;
+                Guarded("effects", () =>
                 {
-                    float flash = Mathf.PingPong(Time.time * 3f, 1f);
-                    TruckScreenText.instance.background.color =
-                        Color.Lerp(TruckScreenText.instance.evilBackgroundColor, new Color(0.7f, 0f, 0f), flash);
-                }
+                    PulseLights(t, p);
+                    PitchAlarms(p);
+                    Beep(ref beepNext, t, p);
+                    Shake(t, p);
+                    Visuals(t, p);
 
-                if (Time.frameCount % 30 == 0) KeepEnemiesPanicking();
-                if (Time.frameCount % 120 == 0)
-                {
-                    float enemyMult = 1.3f + p * 0.5f;
-                    foreach (var (a, orig) in _enemySpeeds)
-                        if (a != null && a.gameObject != null) a.speed = orig * enemyMult;
-                    foreach (var (anim, orig) in _enemyAnims)
-                        if (anim != null) anim.speed = orig * enemyMult;
-                }
+                    if (TruckScreenText.instance?.background != null)
+                    {
+                        float flash = Mathf.PingPong(Time.time * 3f, 1f);
+                        TruckScreenText.instance.background.color =
+                            Color.Lerp(TruckScreenText.instance.evilBackgroundColor, new Color(0.7f, 0f, 0f), flash);
+                    }
+
+                    if (Time.frameCount % 30 == 0) KeepEnemiesPanicking();
+                    if (Time.frameCount % 120 == 0)
+                    {
+                        float enemyMult = 1.3f + p * 0.5f;
+                        foreach (var (a, orig) in _enemySpeeds)
+                            if (a != null && a.gameObject != null) a.speed = orig * enemyMult;
+                        foreach (var (anim, orig) in _enemyAnims)
+                            if (anim != null) anim.speed = orig * enemyMult;
+                    }
+                });
+                nextBeep = beepNext;
 
                 if (t >= nextDestroy && SemiFunc.IsMasterClientOrSingleplayer())
                 {
@@ -637,6 +667,7 @@ namespace ScalerCore.AprilFools
             _shrinking = false;
             _shrunken  = true;
             _routine   = null;
+            Plugin.Log.LogInfo($"[MapCollapse] collapse ended at {Elapsed():F1}s, killed={killed}, scale {(_level != null ? _level.localScale.x : 0f):F3}");
 
             if (!killed) yield return StartCoroutine(CrushSequence());
         }
@@ -874,6 +905,7 @@ namespace ScalerCore.AprilFools
             // re-applies the last collapse's fog to whatever scene is current.
             if (!_ran) return;
             _ran = false;
+            Plugin.Log.LogInfo($"[MapCollapse] restore on {(SemiFunc.IsMasterClientOrSingleplayer() ? "host" : "client")} at {Elapsed():F1}s, was {(_shrinking ? "shrinking" : _shrunken ? "done" : "idle")}");
             _shrinking = _shrunken = false;
             StopAllCoroutines();
             _routine = null;

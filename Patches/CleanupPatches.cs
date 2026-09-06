@@ -1,15 +1,22 @@
 using HarmonyLib;
+using ScalerCore.Utilities;
 
 namespace ScalerCore
 {
-    // RunManager.ChangeLevel early-returns on non-host during gameplay,
-    // so this postfix only fires on host/singleplayer. Non-host clients
-    // run CleanupAll via the UpdateLevelRPC patch instead.
+    // RunManager.ChangeLevel returns on its first line for a non-host in a level, but a
+    // postfix runs regardless, so the cleanup mirrors that check before doing anything.
+    // Non-host clients get their real cleanup from the UpdateLevelRPC patch below.
     [HarmonyPatch(typeof(RunManager), "ChangeLevel")]
     internal static class LevelChangePatch
     {
-        static void Postfix()
+        static void Prefix(RunManager __instance, out bool __state)
         {
+            __state = LevelChangeGate.Proceeds(SemiFunc.MenuLevel(), SemiFunc.IsMasterClientOrSingleplayer(), __instance.restarting);
+        }
+
+        static void Postfix(bool __state)
+        {
+            if (!__state) return;
             ScaleManager.CleanupAll();
             AprilFools.MapCollapse.OnLevelChange();
         }

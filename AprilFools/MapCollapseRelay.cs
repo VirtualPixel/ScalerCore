@@ -32,7 +32,24 @@ namespace ScalerCore.AprilFools
             return relay;
         }
 
+        // While a collapse runs, the master re-sends the same anchor every few seconds.
+        // TryBegin is a no-op on a machine that is already collapsing, so this only
+        // matters to a client that missed the start (level not generated yet on its
+        // side when the RPC landed, or the RPC lost). Cheap, and it makes the start
+        // self-healing instead of a single shot.
+        const float ReanchorEvery = 5f;
+        float _nextReanchor;
+
         void Awake() => Instance = this;
+
+        void Update()
+        {
+            if (!PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || photonView == null) return;
+            if (!MapCollapse.IsActive(out double startTime)) { _nextReanchor = 0f; return; }
+            if (Time.time < _nextReanchor) return;
+            _nextReanchor = Time.time + ReanchorEvery;
+            photonView.RPC(nameof(RPC_MapCollapseStart), RpcTarget.Others, startTime);
+        }
 
         internal void BroadcastStart()
         {
@@ -42,6 +59,7 @@ namespace ScalerCore.AprilFools
             // progress from the same PhotonNetwork.Time origin, so the blink
             // period, alarm pitch, and scale curve stay in lockstep no matter
             // when the RPC landed.
+            Plugin.Log.LogInfo($"[MapCollapse] host broadcasting start, anchor {PhotonNetwork.Time:F2}, view {photonView.ViewID}");
             photonView.RPC(nameof(RPC_MapCollapseStart), RpcTarget.All, PhotonNetwork.Time);
         }
 
@@ -49,6 +67,7 @@ namespace ScalerCore.AprilFools
         {
             if (SemiFunc.IsMasterClientOrSingleplayer()) return;
             if (photonView == null || !PhotonNetwork.InRoom) return;
+            Plugin.Log.LogInfo("[MapCollapse] client asking the host to start");
             photonView.RPC(nameof(RPC_MapCollapseRequest), RpcTarget.MasterClient);
         }
 
@@ -57,7 +76,9 @@ namespace ScalerCore.AprilFools
         {
             // Only the master commands a collapse; anyone else spoofing this is dropped.
             if (PhotonNetwork.InRoom && (info.Sender == null || info.Sender != PhotonNetwork.MasterClient)) return;
-            MapCollapse.TryBegin(startTime);
+            bool began = MapCollapse.TryBegin(startTime);
+            if (began || !MapCollapse.IsActive(out _))
+                Plugin.Log.LogInfo($"[MapCollapse] start RPC from {(info.Sender != null ? info.Sender.NickName : "local")}, anchor {startTime:F2}, now {MapCollapse.Clock:F2}, began={began}, generated={LevelGenerator.Instance != null && LevelGenerator.Instance.Generated}");
         }
 
         [PunRPC]
