@@ -144,14 +144,19 @@ namespace ScalerCore
             // object and does not start a second respawn; the rest of the session is built in
             // EnsureInitialized once the handler and rigidbody are resolved.
             var ownPv = GetComponent<PhotonView>();
-            if (ownPv != null && NativeScaleData.TryUnpack(ownPv.InstantiationData, out var orig, out _, out _, out var nOpts, out var nFlags))
+            if (ownPv != null && NativeScaleData.TryUnpack(ownPv.InstantiationData, out var orig, out float nFrom, out _, out var nOpts, out var nFlags))
             {
                 _native = true;
                 _nativeData = ownPv.InstantiationData;
                 OriginalScale = new Vector3(orig[0], orig[1], orig[2]);
-                _target = _t.localScale;
-                _animScale = _t.localScale;
                 _options = ScaleOptionsCodec.Unpack(nOpts, nFlags, ScaleOptions.Default);
+                _target = OriginalScale * _options.Factor;
+                // Start from the size this clone replaced right now, in the same Awake the game
+                // applied the target in, so no frame is ever drawn at the target before the
+                // animation runs. Unmodded machines have no controller and keep the target.
+                float startFactor = nFrom > 0f ? nFrom : _options.Factor;
+                _t.localScale = OriginalScale * startFactor;
+                _animScale = _t.localScale;
                 if (!Mathf.Approximately(_options.Factor, 1f))
                 {
                     IsScaled = true;
