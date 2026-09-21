@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Dev-only. Drives a singleplayer run, summons enemies through the game's own spawn path
+       and measures their feet against the floor at a spread of ScalerCore factors. Never
+       shipped. Only wakes up when BepInEx/config/scalercore-probe.flag exists in the profile. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <Version>0.1.0</Version>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <RootNamespace>ScalerCoreProbe</RootNamespace>
+    <AssemblyName>ScalerCoreProbe</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <UserHome Condition="'$(UserHome)' == '' and '$(HOME)' != ''">$(HOME)</UserHome>
+    <UserHome Condition="'$(UserHome)' == '' and '$(USERPROFILE)' != ''">$(USERPROFILE)</UserHome>
+    <GalePluginsDir Condition="'$(GalePluginsDir)' == ''">$(UserHome)/.local/share/com.kesomannen.gale/repo/profiles/Developer/BepInEx/plugins</GalePluginsDir>
+    <OutputPath>$(GalePluginsDir)/ScalerCoreProbe/</OutputPath>
+    <RepoManagedDir Condition="'$(RepoManagedDir)' == '' and '$(REPO_MANAGED_DIR)' != ''">$(REPO_MANAGED_DIR)</RepoManagedDir>
+    <RepoManagedDir Condition="'$(RepoManagedDir)' == '' and Exists('$(UserHome)/.local/share/Steam/steamapps/common/REPO/REPO_Data/Managed')">$(UserHome)/.local/share/Steam/steamapps/common/REPO/REPO_Data/Managed</RepoManagedDir>
+    <RestoreAdditionalProjectSources>https://api.nuget.org/v3/index.json;https://nuget.bepinex.dev/v3/index.json</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
+  <!-- ScalerCore itself: the sibling build output first, so the probe always compiles against
+       the tree it is testing, then whatever is deployed in the Gale profile. -->
+  <PropertyGroup>
+    <ScalerCoreRepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../..'))</ScalerCoreRepoRoot>
+    <ScalerCoreDll Condition="'$(ScalerCoreDll)' == '' and Exists('$(ScalerCoreRepoRoot)/BuildZip/ScalerCore/ScalerCore.dll')">$(ScalerCoreRepoRoot)/BuildZip/ScalerCore/ScalerCore.dll</ScalerCoreDll>
+    <ScalerCoreDll Condition="'$(ScalerCoreDll)' == '' and Exists('$(GalePluginsDir)/ScalerCore/ScalerCore.dll')">$(GalePluginsDir)/ScalerCore/ScalerCore.dll</ScalerCoreDll>
+    <ScalerCoreDll Condition="'$(ScalerCoreDll)' == ''">$(UserHome)/.local/share/com.kesomannen.gale/repo/profiles/Developer/BepInEx/plugins/ScalerCore/ScalerCore.dll</ScalerCoreDll>
+  </PropertyGroup>
+
+  <Target Name="CheckScalerCoreReference" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(ScalerCoreDll)')"
+           Text="No ScalerCore.dll to reference. Build ScalerCore first (dotnet build -c Release), or pass -p:ScalerCoreDll=/path/to/ScalerCore.dll." />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.1" PrivateAssets="all" IncludeAssets="build" />
+    <PackageReference Include="BepInEx.Core" Version="5.*" ExcludeAssets="runtime" />
+    <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" IncludeAssets="compile" PrivateAssets="all" />
+    <Publicize Include="Assembly-CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp"><HintPath>$(RepoManagedDir)/Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Assembly-CSharp-firstpass"><HintPath>$(RepoManagedDir)/Assembly-CSharp-firstpass.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="PhotonUnityNetworking"><HintPath>$(RepoManagedDir)/PhotonUnityNetworking.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="PhotonRealtime"><HintPath>$(RepoManagedDir)/PhotonRealtime.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Photon3Unity3D"><HintPath>$(RepoManagedDir)/Photon3Unity3D.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UI"><HintPath>$(RepoManagedDir)/UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="ScalerCore"><HintPath>$(ScalerCoreDll)</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+</Project>
