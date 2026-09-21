@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Reflection;
 using Photon.Pun;
 using ScalerCore.Handlers;
 using ScalerCore.Utilities;
@@ -31,6 +33,88 @@ namespace ScalerCore
         internal static bool Held(ScaleController ctrl) =>
             ctrl._physGrabObject != null && (ctrl._physGrabObject.grabbed || ctrl._physGrabObject.playerGrabbing.Count > 0);
 
+        // The game's own answer to "is this in a cart", not a measurement of our own: the impact
+        // detector raises inCart while the object sits in the cart's In Cart volume and holds the
+        // cart it is in, and the cart re-reads that volume into itemsInCart twice a second. Both
+        // are read here because the detector's flag runs on a timer and the list is the one other
+        // mods work from.
+        internal static bool InCart(ScaleController ctrl)
+        {
+            var pgo = ctrl._physGrabObject;
+            if (pgo == null) return false;
+            var detector = pgo.impactDetector;
+            if (detector == null) return false;
+            if (detector.inCart) return true;
+            var cart = detector.currentCart;
+            return cart != null && cart.itemsInCart.Contains(pgo);
+        }
+
+        // Assemblies whose components a respawn can rebuild, because the prefab has them: the
+        // game, Unity, Photon, and us. Anything else on the object is another mod's, and the
+        // prefab it respawns from has no such component and nothing it had learned since it
+        // spawned. Content another mod added to the game is in the same boat: the prefab brings
+        // its own components back, but they come back new, so it stays on the RPC path too.
+        static readonly Dictionary<Assembly, bool> KnownAssemblies = new();
+
+        static bool IsRebuildable(Assembly assembly)
+        {
+            if (KnownAssemblies.TryGetValue(assembly, out bool known)) return known;
+            if (assembly == typeof(NativeRespawn).Assembly)
+            {
+                KnownAssemblies[assembly] = true;
+                return true;
+            }
+            string name = assembly.GetName().Name;
+            bool ours = name.StartsWith("Assembly-CSharp")      // the game, and firstpass
+                     || name.StartsWith("UnityEngine")
+                     || name.StartsWith("Unity.")
+                     || name.StartsWith("Photon")
+                     || name.StartsWith("System")
+                     || name == "mscorlib"
+                     || name == "netstandard";
+            KnownAssemblies[assembly] = ours;
+            return ours;
+        }
+
+        // Cached per object: a mod attaches what it attaches when the object spawns, and this
+        // walks every component on it and under it.
+        internal static bool HasForeignComponent(ScaleController ctrl)
+        {
+            if (ctrl._foreignChecked) return ctrl._foreignComponent != null;
+            ctrl._foreignChecked = true;
+            foreach (var mb in ctrl.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                if (mb == null) continue; // a script the object lost, nothing to carry
+                var type = mb.GetType();
+                if (IsRebuildable(type.Assembly)) continue;
+                ctrl._foreignComponent = $"{type.FullName} ({type.Assembly.GetName().Name})";
+                break;
+            }
+            return ctrl._foreignComponent != null;
+        }
+
+        // Everything that keeps an object off the respawn path, in one place, with the reason.
+        internal static RespawnRules.Exclusion ExclusionFor(ScaleController ctrl)
+        {
+            var reason = RespawnRules.Excluded(KindEligible(ctrl), InCart(ctrl), HasForeignComponent(ctrl), Held(ctrl));
+            if (reason != RespawnRules.Exclusion.None && ctrl._loggedExclusion != reason)
+            {
+                ctrl._loggedExclusion = reason;
+                if (reason != RespawnRules.Exclusion.Kind)
+                    Plugin.Log.LogDebug($"[SC] {ctrl._displayName} stays on the shrink RPC: {Because(reason, ctrl)}");
+            }
+            return reason;
+        }
+
+        static string Because(RespawnRules.Exclusion reason, ScaleController ctrl) => reason switch
+        {
+            RespawnRules.Exclusion.Kind    => "nothing to respawn it from",
+            RespawnRules.Exclusion.InCart  => "it is in a cart, and a swap would orphan it in the cart's list and in every mod keeping one",
+            RespawnRules.Exclusion.Foreign => $"another mod put {ctrl._foreignComponent} on it, and the prefab has no such thing",
+            RespawnRules.Exclusion.Held    => "someone is holding it, the swap waits until they are not",
+            _                              => "no reason",
+        };
+
         internal static bool Driven(ScaleController ctrl)
         {
             var vehicle = ctrl.GetComponent<ItemVehicle>();
@@ -47,7 +131,7 @@ namespace ScalerCore
                 PhotonNetwork.IsMasterClient,
                 sceneView,
                 ResolvePrefabPath(ctrl) != null,
-                KindEligible(ctrl),
+                RespawnRules.RespawnAllowed(ExclusionFor(ctrl)),
                 Held(ctrl),
                 ctrl.InInventory,
                 Driven(ctrl),
@@ -99,6 +183,15 @@ namespace ScalerCore
             var valuable = go.GetComponent<ValuableObject>();
             var attrs = go.GetComponent<ItemAttributes>();
             var battery = go.GetComponent<ItemBattery>();
+            var toggle = go.GetComponent<ItemToggle>();
+            string? instanceName = attrs != null ? attrs.instanceName : null;
+
+            // The battery level lives in the run's stats under the item's own name, and that is
+            // where the game reads it from whenever an item takes that name. Writing the live
+            // level there before the swap, through the game's own synced setter, is what gets it
+            // onto every machine when the clone claims the name back a frame later.
+            if (battery != null && !string.IsNullOrEmpty(instanceName))
+                SemiFunc.StatSetBattery(instanceName!, Mathf.RoundToInt(battery.batteryLife));
 
             object[] data = NativeScaleData.Pack(
                 new[] { targetScale.x, targetScale.y, targetScale.z },
@@ -147,8 +240,16 @@ namespace ScalerCore
             {
                 cloneValuable.dollarValueOriginal = valuable.dollarValueOriginal;
                 cloneValuable.dollarValueCurrent = valuable.dollarValueCurrent;
+                cloneValuable.dollarValueOverride = valuable.dollarValueOverride;
+                // Set before the clone's own value coroutine gets there, so it leaves the
+                // number alone and only sends it on to the other machines.
                 cloneValuable.dollarValueSet = true;
-                cloneValuable.discovered = valuable.discovered;
+                // Whatever the object has been through: a valuable that was dropped once is
+                // worth less than its preset, and the break logic is harder on it from here.
+                var detector = go.GetComponent<PhysGrabObjectImpactDetector>();
+                var cloneDetector = clone.GetComponent<PhysGrabObjectImpactDetector>();
+                if (detector != null && cloneDetector != null)
+                    cloneDetector.durability = detector.durability;
                 // Its Start adds the value to the haul goal again; the original already counted.
                 if (RoundDirector.instance != null)
                     RoundDirector.instance.haulGoalMax -= (int)valuable.dollarValueCurrent;
@@ -165,10 +266,41 @@ namespace ScalerCore
             if (battery != null && cloneBattery != null)
                 cloneBattery.SetBatteryLife(Mathf.RoundToInt(battery.batteryLife));
 
+            // The rest of it the game hands out in its own Start, so it cannot be set here and
+            // made to stick. The controller puts it back once the clone has been through that.
+            var freshCtrl = clone.GetComponent<ScaleController>();
+            if (freshCtrl != null)
+            {
+                freshCtrl._carry = new RespawnCarry
+                {
+                    InstanceName = instanceName,
+                    Discovered   = valuable != null && valuable.discovered,
+                    ToggleOn     = toggle != null && toggle.toggleState,
+                };
+                // The old body is still here for this one call, which is the point of it.
+                ScaleManager.NoteRespawn(go, clone, freshCtrl);
+            }
+            else
+            {
+                Plugin.Log.LogWarning($"[SC] native respawn of {ctrl._displayName}: the clone came up without a ScaleController, " +
+                                      "so nothing carried over and no mod was told where it went");
+            }
+
             Plugin.Log.LogInfo($"[SC] native respawn {ctrl._displayName}: {path} at scale {targetScale.x:F2} (from x{fromFactor:F2}), " +
                                $"{(remaining > 0f ? remaining.ToString("F0") + "s left" : "no timer")}, view {clone.GetComponent<PhotonView>()?.ViewID}");
             PhotonNetwork.Destroy(go);
             return true;
         }
+    }
+
+    // The part of the original that the clone cannot be handed at spawn, because the game
+    // writes over it in its own Start: the item's name in the run's stats, which is also where
+    // its battery level is kept, whether the valuable was already on everyone's map, and
+    // whether the device was switched on. ScaleController applies it once the game is done.
+    internal sealed class RespawnCarry
+    {
+        internal string? InstanceName;
+        internal bool Discovered;
+        internal bool ToggleOn;
     }
 }

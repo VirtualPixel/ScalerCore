@@ -1,5 +1,7 @@
+using System;
 using UnityEngine;
 using ScalerCore.Handlers;
+using ScalerCore.Utilities;
 
 namespace ScalerCore
 {
@@ -7,9 +9,33 @@ namespace ScalerCore
     /// Public API facade for ScalerCore.
     /// All external callers (guns, patches, other mods) go through here.
     /// Delegates to ScaleController, no new logic.
+    /// <para>
+    /// A native respawn (see <see cref="NativeSync"/>) replaces the GameObject an object lives
+    /// on. <see cref="ObjectRespawned"/> fires when that happens, and every entry point here
+    /// that takes a GameObject keeps answering for the old one for the rest of the level, so a
+    /// mod that kept a reference is not left talking to something that was destroyed.
+    /// </para>
     /// </summary>
     public static class ScaleManager
     {
+        /// <summary>
+        /// Raised when a native respawn has replaced an object: the old GameObject (still alive,
+        /// destroyed immediately after this returns), the fresh one, and the controller on it,
+        /// which has already read its size and session out of the instantiation data. The host
+        /// is the only machine that raises it, in the same frame it asks for the swap.
+        /// <para>
+        /// This is the hook for a mod that keys objects by something the swap does not carry:
+        /// an instance id, a PhotonView id, a component it added itself. Read what you need off
+        /// the old object here, it is the last moment it exists. ScalerCore's own entry points
+        /// need no help; they redirect an old GameObject to the fresh controller until the level
+        /// changes. A subscriber that throws is logged and skipped, the respawn goes on.
+        /// </para>
+        /// </summary>
+        public static event Action<GameObject, GameObject, ScaleController>? ObjectRespawned;
+
+        // Old instance id to the controller that stands in its place. See RedirectMap.
+        static readonly RedirectMap<ScaleController> Redirects = new();
+
         /// <summary>
         /// Whether scaling may hit dead Semibot heads. Policy belongs to the
         /// calling mod (bind a config there and assign this), not to ScalerCore:
@@ -24,10 +50,11 @@ namespace ScalerCore
         /// game applies on every client whether or not it runs ScalerCore. Players without the
         /// mod see the object at its real size with the right colliders instead of a full-size
         /// body shaking against the host's small one. Players and enemies stay on the RPC path.
-        /// A respawn replaces the GameObject: re-resolve with <see cref="GetController"/> after
-        /// an Apply if you keep a reference. On by default; the player has it under Experimental
-        /// in the config, a consuming mod can turn it off, and a scalercore_nativesync_off file
-        /// in BepInEx/config turns it off for a session.
+        /// A respawn replaces the GameObject. Everything here follows the swap on its own, and
+        /// <see cref="ObjectRespawned"/> says when one happened so a mod can move its own
+        /// bookkeeping. Off until it has been through a real room; the player has it under
+        /// Experimental in the config, a consuming mod can set it, and a scalercore_nativesync_off
+        /// file in BepInEx/config turns it off for a session whatever the setting says.
         /// </summary>
         public static bool NativeSync { get; set; } = Utilities.RespawnRules.NativeSyncDefault;
 
@@ -98,14 +125,45 @@ namespace ScalerCore
         }
 
         /// <summary>
-        /// Get the ScaleController for a game object, resolving through PlayerShrinkLink if needed.
-        /// Returns null if no controller is attached.
+        /// Get the ScaleController for a game object, resolving through PlayerShrinkLink if
+        /// needed, and through a native respawn: an object that was swapped this level answers
+        /// with the controller on the body that replaced it. Returns null if no controller is
+        /// attached. Every other entry point here goes through this, so they all follow a swap.
         /// </summary>
         public static ScaleController? GetController(GameObject target)
         {
+            // Deliberately not "target == null": a destroyed GameObject compares equal to null
+            // and is exactly the case the redirect is here for. The id survives the destroy.
+            if (ReferenceEquals(target, null)) return null;
+            var moved = Redirects.Resolve(target.GetInstanceID());
+            if (moved != null) return moved;
+            if (target == null) return null;
             return target.GetComponent<ScaleController>()
                 ?? target.GetComponent<PlayerShrinkLink>()?.Controller;
         }
+
+        // Host side, from NativeRespawn.Swap, with the old body still alive.
+        internal static void NoteRespawn(GameObject old, GameObject fresh, ScaleController controller)
+        {
+            Redirects.Add(old.GetInstanceID(), fresh.GetInstanceID(), controller);
+            var subscribers = ObjectRespawned;
+            if (subscribers == null) return;
+            foreach (var subscriber in subscribers.GetInvocationList())
+            {
+                // The one call in here that lands in another mod's code. One of them throwing
+                // is their bug to fix, and no reason for the rest to miss the swap.
+                try
+                {
+                    ((Action<GameObject, GameObject, ScaleController>)subscriber)(old, fresh, controller);
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogWarning($"[SC] {subscriber.Method.DeclaringType?.FullName}.{subscriber.Method.Name} threw on ObjectRespawned for {old.name}: {e}");
+                }
+            }
+        }
+
+        internal static void ClearRedirects() => Redirects.Clear();
 
         /// <summary>
         /// Restore with animation (timer expiry, gun toggle).
@@ -199,11 +257,19 @@ namespace ScalerCore
             var ctrl = GetController(target);
             if (ctrl == null)
             {
-                Plugin.Log.LogDebug($"[SC] {call} refused on {target.name}: no ScaleController on this object");
+                Plugin.Log.LogDebug($"[SC] {call} refused on {NameFor(target)}: no ScaleController on this object");
                 return null;
             }
             ctrl.EnsureReady();
             return ctrl;
+        }
+
+        // Something already gone is the interesting half of a refusal, and reading its name
+        // off it would throw where the log line was supposed to explain the no-op.
+        static string NameFor(GameObject target)
+        {
+            if (ReferenceEquals(target, null)) return "nothing";
+            return target == null ? "an object that no longer exists" : target.name;
         }
 
         static bool Locked(ScaleController ctrl, string call)

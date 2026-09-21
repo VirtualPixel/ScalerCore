@@ -136,7 +136,11 @@ The registry resolves handlers by checking predicates in descending priority ord
 | `ForceUpdateOptions(GameObject target, ScaleOptions options)` | `UpdateOptions` without the lock check. For the mod that owns the lock. |
 | `IsScaled(GameObject target)` | Returns true if the object is currently scaled. |
 | `CleanupAll()` | Restore all scaled objects. Called automatically on level change. |
+| `ObjectRespawned` | `event Action<GameObject old, GameObject fresh, ScaleController controller>`. A native respawn replaced an object. Raised on the host while the old body is still alive, with the fresh controller already holding the size and session it read out of the instantiation data. Subscribe if your mod keys objects by anything the swap does not carry, an instance id, a PhotonView id, a component you added. A subscriber that throws is logged and skipped. |
 | `AllowDeadHeads` | Static bool, default false. Whether scaling may hit dead Semibot heads. Policy belongs to the calling mod: bind a config on your side and assign this (ShrinkerGun does exactly that). ScalerCore itself ships no user-facing settings for it. |
+
+A respawn replaces the GameObject, and every entry point above takes the old one for the rest of the level: `GetController`, `IsScaled`, `Apply`, `ApplyIfNotScaled`, `ForceApply`, `Restore`, `RestoreImmediate`, `ForceRestore`, `UpdateOptions` and `ForceUpdateOptions` all resolve an object that has been swapped to the controller on the body that replaced it, through as many respawns as the level has had. The redirect is cleared with the rest of the registry on level change. So holding a reference across an `Apply` is safe; holding one across a level is not, and never was.
+
 
 ### ScaleController (MonoBehaviourPunCallbacks)
 
@@ -286,7 +290,7 @@ For all types:
 
 ## Players without the mod
 
-Since 1.1.0 a scaled item, valuable, cart or vehicle is respawned through the game's own network instantiate with the scale in its instantiation data, and the game applies that on every client, modded or not. So a lobby where only the host runs ScalerCore still sees shrunken loot and carts at the right size with the right colliders. Players and enemies still need the mod on every machine to scale. Something held, pocketed or driven scales for modded players immediately and respawns for everyone the moment it is set down. The respawn is on by default and sits under `[Experimental]` in `BepInEx/config/Vippy.ScalerCore.cfg` as `Native scale respawn`, so a player can turn it off without touching the mods that use it. There is also an empty file named `scalercore_nativesync_off` in `BepInEx/config` to kill it for one session, and a mod can set `ScaleManager.NativeSync = false` itself.
+Since 1.1.0 a scaled item, valuable, cart or vehicle is respawned through the game's own network instantiate with the scale in its instantiation data, and the game applies that on every client, modded or not. So a lobby where only the host runs ScalerCore still sees shrunken loot and carts at the right size with the right colliders. Players and enemies still need the mod on every machine to scale. Something held, pocketed or driven scales for modded players immediately and respawns for everyone the moment it is set down. The respawn ships off and sits under `[Experimental]` in `BepInEx/config/Vippy.ScalerCore.cfg` as `Native scale respawn`, so a player can turn it off without touching the mods that use it. There is also an empty file named `scalercore_nativesync_off` in `BepInEx/config` to kill it for one session, and a mod can set `ScaleManager.NativeSync = false` itself. An object stays on the old RPC path, visible only to modded players, when a swap would cost more than it is worth: while it sits in a cart, when another mod has put one of its own components on it, and while someone is holding it, where the swap waits instead. The reason goes in the log once per object at debug level.
 
 ## Come hang out
 

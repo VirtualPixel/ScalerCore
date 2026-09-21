@@ -140,6 +140,19 @@ namespace ScalerCore
         float _nextDeferredCheck;
         internal string? _prefabPath;
 
+        // Why this object is being kept off the respawn path, as last written to the log, so a
+        // cart full of valuables says it once each instead of four times a second.
+        internal RespawnRules.Exclusion _loggedExclusion;
+
+        // The first foreign component found on this object, and whether we have looked yet.
+        internal bool _foreignChecked;
+        internal string? _foreignComponent;
+
+        // Host only, and only on a clone: what the original had that the game overwrites in its
+        // own Start, applied a frame or two in (see ApplyCarry).
+        internal RespawnCarry? _carry;
+        int _carryFrames;
+
         internal bool InInventory => IsItemInInventory();
 
         void Awake()
@@ -342,6 +355,36 @@ namespace ScalerCore
             NativeRespawn.Swap(this, _target, _options, _shrinkTimer, _options.Factor);
         }
 
+        // Host only: the last of what a respawn carried over, put back once the game has run
+        // its own Start on this body and stopped writing over it. ItemAttributes takes its
+        // stats name in Start, ItemToggle only has its PhotonView from Start, and the sounds it
+        // plays are fetched in its first Update, so this waits a frame past both.
+        void ApplyCarry()
+        {
+            var carry = _carry!;
+            _carry = null;
+
+            if (carry.Discovered)
+            {
+                var valuable = GetComponent<ValuableObject>();
+                var pv = GetComponent<PhotonView>();
+                // The game's own discover call would play the discovery flash at someone who
+                // found this thing ten minutes ago; its RPC is the half that puts it on the map.
+                if (valuable != null && !valuable.discovered && pv != null && pv.ViewID != 0)
+                    pv.RPC("DiscoverRPC", RpcTarget.All);
+            }
+
+            if (carry.ToggleOn)
+            {
+                var toggle = GetComponent<ItemToggle>();
+                if (toggle != null && !toggle.toggleState)
+                    toggle.ToggleItem(true);
+            }
+
+            Plugin.Log.LogDebug($"[SC] respawn carry applied on {_displayName}: " +
+                                $"name={carry.InstanceName ?? "none"}  discovered={carry.Discovered}  switchedOn={carry.ToggleOn}");
+        }
+
         void Update()
         {
             bool isHost = SemiFunc.IsMasterClientOrSingleplayer();
@@ -349,6 +392,9 @@ namespace ScalerCore
             // Only the host/singleplayer owns the shrink timer and bonk immunity.
             if (isHost)
             {
+                if (_carry != null && ++_carryFrames > 1)
+                    ApplyCarry();
+
                 if (IsScaled && _shrinkTimer > 0f)
                 {
                     _shrinkTimer -= Time.deltaTime;
@@ -1312,6 +1358,8 @@ namespace ScalerCore
                 ctrl._t.localScale = ctrl.OriginalScale;
             }
             Scaled.Clear();
+            // The level that owned those objects is gone, and so is every id that pointed at one.
+            ScaleManager.ClearRedirects();
 
             // Challenge mode re-shrink is handled by ChallengeModeDeferred in Start()
             // when new player ScaleControllers are created for the next level.

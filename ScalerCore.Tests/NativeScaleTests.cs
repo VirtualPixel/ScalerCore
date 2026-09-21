@@ -1,5 +1,6 @@
 using ScalerCore.Utilities;
 using Xunit;
+using Verdict = ScalerCore.Utilities.RespawnRules.Verdict;
 
 namespace ScalerCore.Tests
 {
@@ -118,6 +119,101 @@ namespace ScalerCore.Tests
             Assert.Equal(RespawnRules.Verdict.WhenFree, RespawnRules.Decide(true, true, true, true, true, true, false, false, true, true));
             // Unless the mod says held objects never respawn.
             Assert.Equal(RespawnRules.Verdict.Never, RespawnRules.Decide(true, true, true, true, true, true, true, false, false, false));
+        }
+
+        // An object that was respawned answers to the id it had before, because that is the id
+        // a mod took off it. ShrinkCart keeps a set of them for the items it shrank in a cart.
+        [Fact]
+        public void AnOldIdLeadsToWhatReplacedIt()
+        {
+            var map = new RedirectMap<string>();
+            map.Add(oldId: 11, freshId: 22, "the clone");
+            Assert.Equal("the clone", map.Resolve(11));
+            Assert.True(map.TryResolve(11, out string fresh));
+            Assert.Equal("the clone", fresh);
+            // The body that is standing there now answers for itself.
+            Assert.Equal("the clone", map.Resolve(22));
+            // An id that was never swapped is nobody's business: the object has itself.
+            Assert.Null(map.Resolve(33));
+            Assert.False(map.TryResolve(33, out _));
+        }
+
+        [Fact]
+        public void EveryIdAnObjectEverHadLeadsToTheLastOne()
+        {
+            var map = new RedirectMap<string>();
+            map.Add(11, 22, "shrunk");
+            map.Add(22, 33, "shrunk again");
+            map.Add(33, 44, "back to size");
+            Assert.Equal("back to size", map.Resolve(11));
+            Assert.Equal("back to size", map.Resolve(22));
+            Assert.Equal("back to size", map.Resolve(33));
+            Assert.Equal(3, map.Count);
+        }
+
+        [Fact]
+        public void TheLevelChangeTakesTheIdsWithIt()
+        {
+            var map = new RedirectMap<string>();
+            map.Add(11, 22, "the clone");
+            map.Clear();
+            Assert.Null(map.Resolve(11));
+            Assert.Equal(0, map.Count);
+        }
+
+        [Fact]
+        public void AnIdThatLeadsBackToItselfDoesNotSpin()
+        {
+            var map = new RedirectMap<string>();
+            map.Add(11, 22, "there");
+            map.Add(22, 11, "back");
+            Assert.NotNull(map.Resolve(11));
+        }
+
+        // What is kept off the respawn path and why. A cart item and anything wearing another
+        // mod's component stay on the shrink RPC for good; a held object only waits.
+        [Fact]
+        public void TheExclusionTable()
+        {
+            var kind    = RespawnRules.Exclusion.Kind;
+            var inCart  = RespawnRules.Exclusion.InCart;
+            var foreign = RespawnRules.Exclusion.Foreign;
+            var held    = RespawnRules.Exclusion.Held;
+
+            Assert.Equal(RespawnRules.Exclusion.None, RespawnRules.Excluded(kindEligible: true, inCart: false, foreignComponent: false, held: false));
+            Assert.Equal(kind,    RespawnRules.Excluded(false, false, false, false));
+            Assert.Equal(inCart,  RespawnRules.Excluded(true,  true,  false, false));
+            Assert.Equal(foreign, RespawnRules.Excluded(true,  false, true,  false));
+            Assert.Equal(held,    RespawnRules.Excluded(true,  false, false, true));
+            // A cart item in someone's hand is a cart item: waiting for the hand would not help.
+            Assert.Equal(inCart,  RespawnRules.Excluded(true,  true,  false, true));
+            Assert.Equal(inCart,  RespawnRules.Excluded(true,  true,  true,  false));
+            Assert.Equal(kind,    RespawnRules.Excluded(false, true,  true,  true));
+        }
+
+        [Fact]
+        public void OnlyTheHandLetsGo()
+        {
+            Assert.True(RespawnRules.RespawnAllowed(RespawnRules.Exclusion.None));
+            Assert.True(RespawnRules.RespawnAllowed(RespawnRules.Exclusion.Held));
+            Assert.False(RespawnRules.RespawnAllowed(RespawnRules.Exclusion.Kind));
+            Assert.False(RespawnRules.RespawnAllowed(RespawnRules.Exclusion.InCart));
+            Assert.False(RespawnRules.RespawnAllowed(RespawnRules.Exclusion.Foreign));
+        }
+
+        // The two tables together: an excluded object never reaches the respawn, whatever the
+        // rest of the room says, and a held one comes back to it.
+        [Fact]
+        public void AnExcludedObjectNeverRespawnsAndAHeldOneWaits()
+        {
+            Verdict For(RespawnRules.Exclusion reason, bool held) => RespawnRules.Decide(
+                nativeSync: true, multiplayer: true, isMaster: true, hasSceneView: true, hasPrefabPath: true,
+                eligible: RespawnRules.RespawnAllowed(reason), held: held, inInventory: false, driven: false, whileHeld: true);
+
+            Assert.Equal(Verdict.Now,      For(RespawnRules.Exclusion.None,    held: false));
+            Assert.Equal(Verdict.Never,    For(RespawnRules.Exclusion.InCart,  held: false));
+            Assert.Equal(Verdict.Never,    For(RespawnRules.Exclusion.Foreign, held: false));
+            Assert.Equal(Verdict.WhenFree, For(RespawnRules.Exclusion.Held,    held: true));
         }
     }
 }
