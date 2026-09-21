@@ -5,9 +5,10 @@ namespace ScalerCore.Utilities
     // ScalerCore clients understand. Pure so the table has tests.
     internal static class RespawnRules
     {
-        // On unless the player says otherwise. The respawn is the only path an unmodded client
-        // can see, so the default that makes ScalerCore look right for everyone is on.
-        public const bool NativeSyncDefault = true;
+        // Off until it has been through a real room. The respawn is the only path an unmodded
+        // client can see, so it will be the default once it has stood up in play; until then
+        // it is a switch for the people testing it.
+        public const bool NativeSyncDefault = false;
 
         public enum Verdict { Never, WhenFree, Now }
 

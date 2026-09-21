@@ -2,6 +2,8 @@
 
 ## 1.1.0
 
+- The native scale respawn (the path players without ScalerCore can see) ships off. Turn it on under Experimental to test it; it becomes the default once it has stood up in a real room.
+
 ### New
 - Scaled objects show up right for players who do not have ScalerCore. Items, valuables, carts, vehicles and cosmetic boxes are scaled by respawning them through the game's own network instantiate with the scale in the instantiation data, which the game applies on every client whether or not it runs the mod. An unmodded client gets the object at its real size with the right colliders, instead of a full-size body shaking against the host's small one and walking through walls, which is what a shrunken cart or the contents of a shrink cart looked like to them. On a client with ScalerCore nothing looks different: the clone reads the rest of the data and runs the usual session, animation in, audio, mass, pocketing, timers, late joiners included. Players, enemies and doors have no prefab to respawn from and stay on the shrink RPC as before.
 - An object in someone's hand, an inventory slot or a seat is not swapped under them: it scales on the spot over the RPC as before, and the respawn happens the moment it is free.

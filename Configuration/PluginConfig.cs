@@ -24,7 +24,7 @@ namespace ScalerCore.Configuration
 
             NativeRespawn = config.Bind("Experimental", "Native scale respawn",
                 RespawnRules.NativeSyncDefault,
-                "Experimental. When the host scales a resting item, valuable or cart, respawn it "
+                "Experimental, off until it has been played. When the host scales a resting item, valuable or cart, respawn it "
               + "through the game's own instantiate with the size in the spawn data. Every client "
               + "applies that itself, so players without ScalerCore see the object at its real size "
               + "with physics to match instead of a full-size copy shaking against the host's. "
