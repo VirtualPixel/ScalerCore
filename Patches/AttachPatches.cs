@@ -1,7 +1,22 @@
 using HarmonyLib;
+using ScalerCore.Utilities;
 
 namespace ScalerCore
 {
+    // The late-join sender rides PunManager's object: it is the one object that exists for as
+    // long as the connection does, is never switched off, and is already where a mod hangs its
+    // networking. Attaching from PunManager's own Start also means Photon is up by then, which
+    // it is not when BepInEx runs the plugin's Awake.
+    [HarmonyPatch(typeof(PunManager), "Start")]
+    internal static class AttachNetRelayPatch
+    {
+        static void Postfix(PunManager __instance)
+        {
+            if (__instance.GetComponent<ScaleNetRelay>() != null) return;
+            __instance.gameObject.AddComponent<ScaleNetRelay>();
+        }
+    }
+
     // Awake, not Start: a networked valuable can be spawned and shrunk by the host in the
     // same network pass it is instantiated on a client, and the shrink RPC dispatches before
     // Unity runs Start. Attaching (and registering the RPC cache, in ScaleController.Awake)

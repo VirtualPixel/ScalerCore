@@ -25,10 +25,11 @@ namespace ScalerCore
         /// mod see the object at its real size with the right colliders instead of a full-size
         /// body shaking against the host's small one. Players and enemies stay on the RPC path.
         /// A respawn replaces the GameObject: re-resolve with <see cref="GetController"/> after
-        /// an Apply if you keep a reference. On by default; a consuming mod can turn it off, and
-        /// a scalercore_nativesync_off file in BepInEx/config turns it off for a session.
+        /// an Apply if you keep a reference. On by default; the player has it under Experimental
+        /// in the config, a consuming mod can turn it off, and a scalercore_nativesync_off file
+        /// in BepInEx/config turns it off for a session.
         /// </summary>
-        public static bool NativeSync { get; set; } = true;
+        public static bool NativeSync { get; set; } = Utilities.RespawnRules.NativeSyncDefault;
 
         /// <summary>
         /// With <see cref="NativeSync"/>, an object in a hand, an inventory slot or a seat is
@@ -50,10 +51,10 @@ namespace ScalerCore
         /// </summary>
         public static void Apply(GameObject target, ScaleOptions options)
         {
-            var ctrl = GetController(target);
+            var ctrl = Resolve(target, nameof(Apply));
             if (ctrl == null) return;
-            if (IsLockedFromExternal(ctrl)) return;
-            if (!IsTargetAllowed(ctrl, options.AllowedTargets)) return;
+            if (Locked(ctrl, nameof(Apply))) return;
+            if (!Allowed(ctrl, options.AllowedTargets, nameof(Apply))) return;
             ctrl.DispatchShrink(options);
         }
 
@@ -71,10 +72,15 @@ namespace ScalerCore
         /// </summary>
         public static bool ApplyIfNotScaled(GameObject target, ScaleOptions options)
         {
-            var ctrl = GetController(target);
-            if (ctrl == null || ctrl.IsScaled) return false;
-            if (IsLockedFromExternal(ctrl)) return false;
-            if (!IsTargetAllowed(ctrl, options.AllowedTargets)) return false;
+            var ctrl = Resolve(target, nameof(ApplyIfNotScaled));
+            if (ctrl == null) return false;
+            if (ctrl.IsScaled)
+            {
+                Plugin.Log.LogDebug($"[SC] {nameof(ApplyIfNotScaled)} refused on {ctrl.DisplayName}: already scaled at x{ctrl.CurrentOptions.Factor}");
+                return false;
+            }
+            if (Locked(ctrl, nameof(ApplyIfNotScaled))) return false;
+            if (!Allowed(ctrl, options.AllowedTargets, nameof(ApplyIfNotScaled))) return false;
             ctrl.DispatchShrink(options);
             return true;
         }
@@ -85,9 +91,9 @@ namespace ScalerCore
         /// </summary>
         public static void ForceApply(GameObject target, ScaleOptions options)
         {
-            var ctrl = GetController(target);
+            var ctrl = Resolve(target, nameof(ForceApply));
             if (ctrl == null) return;
-            if (!IsTargetAllowed(ctrl, options.AllowedTargets)) return;
+            if (!Allowed(ctrl, options.AllowedTargets, nameof(ForceApply))) return;
             ctrl.DispatchShrink(options);
         }
 
@@ -175,6 +181,43 @@ namespace ScalerCore
         public static void CleanupAll()
         {
             ScaleController.CleanupAll();
+        }
+
+        // Every refusal above is a quiet one from the caller's side: the mod asked for a size and
+        // got a no-op back with no exception and, for the void overloads, no return value either.
+        // That is how a boss can stay vanilla-sized for a whole lobby without a single line in the
+        // log, so each gate says which one it was and on what.
+
+        // Resolving the controller also readies it. The target-type test below reads Handler,
+        // which the controller only fills in its own init, and the dispatch runs that init one
+        // step too late: an object asked to scale before its Start has run (a mid-level spawn, a
+        // body switched back on, a controller added this frame) would be gated on a null Handler,
+        // fall through to the Valuables arm, and be refused for every caller that asked for
+        // anything else. Enemies are the ones that asked for something else.
+        static ScaleController? Resolve(GameObject target, string call)
+        {
+            var ctrl = GetController(target);
+            if (ctrl == null)
+            {
+                Plugin.Log.LogDebug($"[SC] {call} refused on {target.name}: no ScaleController on this object");
+                return null;
+            }
+            ctrl.EnsureReady();
+            return ctrl;
+        }
+
+        static bool Locked(ScaleController ctrl, string call)
+        {
+            if (!IsLockedFromExternal(ctrl)) return false;
+            Plugin.Log.LogDebug($"[SC] {call} refused on {ctrl.DisplayName}: the live session set RejectExternalApply");
+            return true;
+        }
+
+        static bool Allowed(ScaleController ctrl, ScaleTargets allowed, string call)
+        {
+            if (IsTargetAllowed(ctrl, allowed)) return true;
+            Plugin.Log.LogDebug($"[SC] {call} refused on {ctrl.DisplayName}: it is a {ctrl.TargetType} target and the caller allowed {allowed}");
+            return false;
         }
 
         // Handlers without a dedicated flag bit (e.g. CosmeticHandler) fall through to Valuables.

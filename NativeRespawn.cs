@@ -21,8 +21,12 @@ namespace ScalerCore
     // the scale on the spot and the swap waits until the object is free.
     internal static class NativeRespawn
     {
+        // A cart and a vehicle carry things, and the swap below only knows how to bring a single
+        // object's value and battery across. Respawning one leaves the new body empty and orphans
+        // whatever it was holding, so those two stay on the shrink RPC: modded clients see them
+        // scale, unmodded clients keep the old resting jitter, which beats an emptied hauler.
         internal static bool KindEligible(ScaleController ctrl) =>
-            ctrl.Handler is ValuableHandler or ItemHandler or CartHandler or VehicleHandler or CosmeticHandler;
+            ctrl.Handler is ValuableHandler or ItemHandler or CosmeticHandler;
 
         internal static bool Held(ScaleController ctrl) =>
             ctrl._physGrabObject != null && (ctrl._physGrabObject.grabbed || ctrl._physGrabObject.playerGrabbing.Count > 0);

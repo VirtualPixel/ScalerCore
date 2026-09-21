@@ -135,6 +135,16 @@ namespace ScalerCore
         public bool RejectExternalApply;
 
         /// <summary>
+        /// Enemies despawn by being switched off and respawn on the same GameObject, and the
+        /// controller restores them on the way out (see ScaleController.OnDisable), so by
+        /// default a monster comes back vanilla-sized and the mod that scaled it has to scale
+        /// it again from its own spawn hook. Set this and the host re-dispatches the same
+        /// session the moment the body switches back on, clients included, with no second
+        /// call from the mod.
+        /// </summary>
+        public bool KeepThroughRespawn;
+
+        /// <summary>
         /// Defaults for a growth mod: twice the size, heavier, a touch faster,
         /// slower deliberate animation, low footsteps. Voice and entity sounds
         /// deepen automatically from Factor; these are the knobs that don't.
@@ -165,6 +175,7 @@ namespace ScalerCore
             SuppressVoicePitch        = false,
             IgnoreBonkExpand          = false,
             RejectExternalApply       = false,
+            KeepThroughRespawn        = false,
         };
 
         /// <summary>
@@ -196,6 +207,7 @@ namespace ScalerCore
             SuppressVoicePitch        = false,
             IgnoreBonkExpand          = false,
             RejectExternalApply       = false,
+            KeepThroughRespawn        = false,
         };
     }
 }

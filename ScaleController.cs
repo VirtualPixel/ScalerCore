@@ -101,9 +101,15 @@ namespace ScalerCore
         internal float _bonkImmuneTimer; // prevents the gun's own bullet from immediately restoring the target
         internal string _displayName = ""; // enemy parent name or GO name, set in Start
 
-        // The PhotonView used for RPCs. For players, this == photonView (same GO).
-        // For enemies, photonView (GetComponent<PhotonView>()) is null because the PhotonView
-        // sits on EnemyParent, not EnemyRigidbody. GetComponentInParent finds it correctly.
+        /// <summary>Readable name for logs: the enemy's parent name, otherwise the GameObject's.</summary>
+        internal string DisplayName => string.IsNullOrEmpty(_displayName) ? gameObject.name : _displayName;
+
+        // The PhotonView this controller's RPCs ride. It has to be the view on this very
+        // GameObject: PUN resolves an incoming RPC against GetComponents on the view's own
+        // object and never looks at children. Players and valuables carry their view on the
+        // body we attach to, and so do enemies (EnemyRigidbody caches its own GetComponent
+        // view and sends GrabReleaseRPC through it), so the walk up the parents below is a
+        // fallback for anything that does not, not the normal case for any of the three.
         internal PhotonView? _networkPV;
 
         // Set once EnsureInitialized has run (rb, handler, room-volume capture resolved).
@@ -116,6 +122,11 @@ namespace ScalerCore
 
         // Sound pitch control, instance manages per-entity pitch state.
         internal AudioPitchHelper _audioPitch = new();
+
+        // Host only: the session a despawn put away, for a caller that asked for
+        // ScaleOptions.KeepThroughRespawn. The body comes back switched on and the host
+        // re-dispatches this, which puts the size back on every client too.
+        ScaleOptions? _respawnSession;
 
         // Native respawn (see NativeRespawn). _native: this object spawned with ScalerCore's
         // instantiation data, so its scale is already on the transform on every machine and the
@@ -194,7 +205,8 @@ namespace ScalerCore
                 $"  scale={OriginalScale}" +
                 $"  mass={(_rb != null ? _rb.mass.ToString("F2") : "none")}" +
                 $"  animTarget={(enemyState?.AnimTarget != null ? enemyState.AnimTarget.gameObject.name : "NONE")}" +
-                $"  navAgent={(enemyState?.NavAgent != null ? "yes" : "no")}");
+                $"  navAgent={(enemyState?.NavAgent != null ? "yes" : "no")}" +
+                $"  groundMarker={(enemyState?.GroundMarker != null ? enemyState.GroundMarker.gameObject.name : "none")}");
 
             // Apply a shrink RPC that arrived before init finished (late-spawned networked
             // object: the host's RPC landed in the same pass the object instantiated). It was
@@ -537,7 +549,15 @@ namespace ScalerCore
             base.OnDisable();
             if (!IsScaled || Handler is not Handlers.EnemyHandler) return;
 
-            Plugin.Log.LogDebug($"[SC] DISABLE (despawn) {_displayName}  restoring scale");
+            // Put the session away before it is torn down. Only the host acts on it: it
+            // re-dispatches on the way back in, which is what carries the size to the clients
+            // again, so a client keeping a copy would only give it a second opinion.
+            _respawnSession = _options.KeepThroughRespawn && SemiFunc.IsMasterClientOrSingleplayer()
+                ? _options
+                : null;
+
+            Plugin.Log.LogDebug($"[SC] DISABLE (despawn) {_displayName}  restoring scale" +
+                (_respawnSession != null ? "  (session held for the respawn)" : ""));
 
             _t.localScale  = OriginalScale;
             _animScale     = OriginalScale;
@@ -560,6 +580,29 @@ namespace ScalerCore
             _audioPitch.RestorePitch();
             ItemHandler.OnRestoreFields(_scaledItemFields);
             _scaledItemFields = null;
+        }
+
+        // A body switched back on: an enemy respawning, or any object the game re-enables. Start
+        // runs once per component, so neither the stashed shrink nor a held session has another
+        // chance to land after the first pass unless it is taken here.
+        public override void OnEnable()
+        {
+            base.OnEnable();
+            if (!_inited) return; // Start has not run yet; it does both of these at its tail
+
+            if (_pendingShrink is { } stashed)
+            {
+                _pendingShrink = null;
+                Plugin.Log.LogDebug($"[SC] applying shrink that arrived while {_displayName} was switched off");
+                ApplyRemoteShrink(stashed.target, stashed.opts, stashed.flags);
+                return;
+            }
+
+            if (_respawnSession is not { } held) return;
+            _respawnSession = null;
+            if (IsScaled || !SemiFunc.IsMasterClientOrSingleplayer()) return;
+            Plugin.Log.LogDebug($"[SC] RESPAWN re-scaling {_displayName} to x{held.Factor}");
+            DispatchShrink(held);
         }
 
         void OnDestroy()
@@ -588,6 +631,13 @@ namespace ScalerCore
             _networkPV = photonView ?? GetComponentInParent<PhotonView>();
             _networkPV?.RefreshRpcMonoBehaviourCache();
         }
+
+        /// <summary>
+        /// Run the one-time init (handler, rigidbody, room-volume capture, RPC view) now.
+        /// <see cref="ScaleManager"/> calls this before it reads <see cref="Handler"/> to decide
+        /// whether a caller is allowed this target.
+        /// </summary>
+        internal void EnsureReady() => EnsureInitialized();
 
         public void DispatchShrink(ScaleOptions options)
         {
@@ -788,6 +838,7 @@ namespace ScalerCore
             EnsureInitialized();
             if (TryNativeRestore()) return;
             IsScaled = false;
+            _respawnSession = null; // a deliberate restore ends the session; it does not come back
             Scaled.Remove(this);
 
             float sizeNow = OriginalScale.x > 0f ? _t.localScale.x / OriginalScale.x : 0f;
@@ -833,6 +884,7 @@ namespace ScalerCore
             }
             if (TryNativeRestore()) return;
             IsScaled = false;
+            _respawnSession = null; // a deliberate restore ends the session; it does not come back
             _shrinkTimer = 0f;
             Scaled.Remove(this);
 
@@ -1272,23 +1324,28 @@ namespace ScalerCore
             _networkPV?.RefreshRpcMonoBehaviourCache();
         }
 
-        // Late-join sync: when a new player enters the room, the host re-sends the current
-        // shrink state for every shrunken object so the joining client sees correct state.
-        // Only fires on the host; each ScaleController handles its own photonView RPC.
+        // Late-join sync for one object, driven by ScaleNetRelay over the host's registry rather
+        // than by a callback on this component: PUN drops a disabled component as a callback
+        // target (MonoBehaviourPunCallbacks.OnDisable removes it), and plenty of scaled objects
+        // sit switched off, so the per-controller version could not speak for all of them.
+        internal void ResendTo(Player player)
+        {
+            if (!IsScaled || _networkPV == null) return;
+            // A native respawn reaches a late joiner through Photon's own buffered instantiate.
+            if (_native) return;
+            Plugin.Log.LogDebug($"[SC] RPC_Shrink RESEND  {DisplayName}  viewID={_networkPV.ViewID}  to={player.NickName}  target={_target}");
+            _networkPV.RPC(nameof(RPC_Shrink), player, _target, PackOpts(), PackBools());
+        }
+
+        // Challenge mode's lobby voice pitch is this component's own business, and it only
+        // matters for a player body, which is never switched off while someone joins.
         public override void OnPlayerEnteredRoom(Player newPlayer)
         {
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
 
-            // Re-apply challenge mode lobby pitch when a new player joins.
             // Their voice chat won't exist yet, so defer a few frames.
             if (ChallengeMode && Handler is Handlers.PlayerHandler)
                 StartCoroutine(LobbyPitchDeferred());
-
-            if (!IsScaled) return;
-            if (_networkPV == null) return;
-            // A native respawn reaches a late joiner through Photon's own buffered instantiate.
-            if (_native) return;
-            _networkPV.RPC(nameof(RPC_Shrink), newPlayer, _target, PackOpts(), PackBools());
         }
     }
 }

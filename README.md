@@ -204,6 +204,7 @@ Each `Apply()` call takes a `ScaleOptions` struct. Use `ScaleOptions.Default` as
 | `SuppressVoicePitch` | `false` | No audio pitch shift on the controller's sounds or player's voice chat |
 | `IgnoreBonkExpand` | `false` | Damage does not restore the controller. Covers every bonk path. |
 | `RejectExternalApply` | `false` | External `Apply`/`Restore`/`RestoreImmediate` calls from other mods no-op. Owning mod uses `ForceApply`/`ForceRestore`. |
+| `KeepThroughRespawn` | `false` | An enemy despawns by being switched off and comes back on the same body, and the controller restores it on the way out, so by default it respawns vanilla-sized. Set this and the host re-dispatches the same session, clients included, the moment the body switches back on. |
 
 ### ScaleTargets
 
@@ -285,7 +286,7 @@ For all types:
 
 ## Players without the mod
 
-Since 1.1.0 a scaled item, valuable, cart or vehicle is respawned through the game's own network instantiate with the scale in its instantiation data, and the game applies that on every client, modded or not. So a lobby where only the host runs ScalerCore still sees shrunken loot and carts at the right size with the right colliders. Players and enemies still need the mod on every machine to scale. Something held, pocketed or driven scales for modded players immediately and respawns for everyone the moment it is set down. To switch the respawn off for a session, put an empty file named `scalercore_nativesync_off` in `BepInEx/config`; a mod can set `ScaleManager.NativeSync = false` instead.
+Since 1.1.0 a scaled item, valuable, cart or vehicle is respawned through the game's own network instantiate with the scale in its instantiation data, and the game applies that on every client, modded or not. So a lobby where only the host runs ScalerCore still sees shrunken loot and carts at the right size with the right colliders. Players and enemies still need the mod on every machine to scale. Something held, pocketed or driven scales for modded players immediately and respawns for everyone the moment it is set down. The respawn is on by default and sits under `[Experimental]` in `BepInEx/config/Vippy.ScalerCore.cfg` as `Native scale respawn`, so a player can turn it off without touching the mods that use it. There is also an empty file named `scalercore_nativesync_off` in `BepInEx/config` to kill it for one session, and a mod can set `ScaleManager.NativeSync = false` itself.
 
 ## Come hang out
 

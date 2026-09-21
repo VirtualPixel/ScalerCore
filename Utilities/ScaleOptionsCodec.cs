@@ -20,7 +20,7 @@ namespace ScalerCore.Utilities
         {
             o.PreserveMass, o.InvertedMode, o.SuppressImpactFlash,
             o.SuppressVoicePitch, o.IgnoreBonkExpand, o.RejectExternalApply,
-            o.SuppressCameraShake
+            o.SuppressCameraShake, o.KeepThroughRespawn
         };
 
         // Slots past the first seven were added over time and are length-guarded, so a shorter
@@ -49,6 +49,7 @@ namespace ScalerCore.Utilities
             o.IgnoreBonkExpand         = flags.Length > 4 && flags[4];
             o.RejectExternalApply      = flags.Length > 5 && flags[5];
             o.SuppressCameraShake      = flags.Length > 6 && flags[6];
+            o.KeepThroughRespawn       = flags.Length > 7 && flags[7];
             return o;
         }
     }

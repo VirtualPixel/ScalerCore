@@ -15,6 +15,9 @@ namespace ScalerCore.Handlers.EnemyVisuals
     /// their own transform. Nudging from a height captured at spawn pins those meshes at that
     /// spawn height, so they float (or sink) as soon as the enemy reaches a floor at a
     /// different level. GroundingTrack keeps that decision honest frame to frame.
+    ///
+    /// Where the feet ARE matters just as much. An enemy that carries its own sole marker is
+    /// measured from that, because that marker is what the enemy's own navigation reads.
     /// </summary>
     internal sealed class VisualGrounding
     {
@@ -35,27 +38,35 @@ namespace ScalerCore.Handlers.EnemyVisuals
         /// second rig) would otherwise be measured while none of it renders, and get no
         /// grounding at all.
         /// </summary>
-        void Measure(Transform animTarget, float ratio)
+        void Measure(Transform animTarget, Transform? groundMarker, float ratio)
         {
             if (_measured || ratio <= 0f) return;
             if (++_attempts > MeasureAttempts) { _measured = true; return; }
 
+            float markerY = 0f;
+            bool hasMarker = groundMarker != null;
+            if (hasMarker) markerY = groundMarker!.position.y;
+
             // Character mesh only. Shadows, ground decals and particle effects are separate
             // renderers that often sit below the feet and would inflate the distance, which
             // lifts the enemy off the ground instead of planting it.
-            Renderer[] renderers = animTarget.GetComponentsInChildren<SkinnedMeshRenderer>();
-            if (renderers.Length == 0)
-                renderers = animTarget.GetComponentsInChildren<MeshRenderer>();
-            if (renderers.Length == 0) return;
+            float lowest = 0f;
+            if (!hasMarker)
+            {
+                Renderer[] renderers = animTarget.GetComponentsInChildren<SkinnedMeshRenderer>();
+                if (renderers.Length == 0)
+                    renderers = animTarget.GetComponentsInChildren<MeshRenderer>();
+                if (renderers.Length == 0) return;
 
-            float lowest = float.MaxValue;
-            foreach (var r in renderers)
-                lowest = Mathf.Min(lowest, r.bounds.min.y);
+                lowest = float.MaxValue;
+                foreach (var r in renderers)
+                    lowest = Mathf.Min(lowest, r.bounds.min.y);
+            }
 
-            // The bounds sit `ratio` times further from the pivot than they do at full size,
-            // so dividing it back out gives the same number whatever the mesh happens to be
-            // scaled to when this finally runs.
-            _pivotToFeet = (animTarget.position.y - lowest) / ratio;
+            // Whatever we read sits `ratio` times further from the pivot than it does at full
+            // size, so dividing it back out gives the same number whatever the mesh happens to
+            // be scaled to when this finally runs.
+            _pivotToFeet = GroundingTrack.PivotToFeet(animTarget.position.y, lowest, markerY, hasMarker, ratio);
             _measured = true;
         }
 
@@ -65,7 +76,7 @@ namespace ScalerCore.Handlers.EnemyVisuals
             var animTarget = state.AnimTarget;
             if (animTarget == null) return;
 
-            Measure(animTarget, ratio);
+            Measure(animTarget, state.GroundMarker, ratio);
             if (_pivotToFeet == 0f) return;
 
             var pos = animTarget.localPosition;

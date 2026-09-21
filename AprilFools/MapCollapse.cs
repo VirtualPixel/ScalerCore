@@ -52,6 +52,11 @@ namespace ScalerCore.AprilFools
         bool _lastBlinkOn;
         int _lastCountdown = -1, _lastTaxmanEmojiIdx = -1, _lastPanic1Idx = -1, _lastPanic2Idx = -1;
         float _origFogEnd, _origFogStart, _origFov;
+
+        // Only the intensity moves, and this runs for all 90 seconds, so the vignette call
+        // is resolved once and the rest of its arguments stay put.
+        GameCall.Binding? _vignette;
+
         // Restore runs on every level change; this says whether there is anything to undo.
         bool _ran;
         // The per-frame extras (lights, audio, camera, chat) are guarded so one of them
@@ -715,7 +720,8 @@ namespace ScalerCore.AprilFools
             // impact + vignette slam
             var pp = PostProcessing.Instance;
             if (pp != null)
-                pp.VignetteOverride(Color.black, 0.8f, 0.1f, 0.5f, 0.1f, 0.5f, gameObject);
+                GameCall.Invoke(pp, typeof(PostProcessing), nameof(PostProcessing.VignetteOverride),
+                    Color.black, 0.8f, 0.1f, 0.5f, 0.1f, 0.5f, gameObject);
 
             AudioScare.instance?.PlayImpact();
             if (CameraGlitch.Instance != null)
@@ -836,7 +842,10 @@ namespace ScalerCore.AprilFools
             var pp = PostProcessing.Instance;
             if (pp != null)
             {
-                pp.VignetteOverride(Color.black, p * 0.45f, 0.4f, 2f, 1f, 2f, gameObject);
+                _vignette ??= GameCall.Bind(typeof(PostProcessing), nameof(PostProcessing.VignetteOverride),
+                    Color.black, 0f, 0.4f, 2f, 1f, 2f, gameObject);
+                _vignette.Args[1] = p * 0.45f;
+                _vignette.Run(pp);
                 pp.SaturationOverride(-p * 40f, 2f, 1f, 2f, gameObject);
                 pp.ContrastOverride(p * 15f, 2f, 1f, 2f, gameObject);
 

@@ -1,3 +1,4 @@
+using HarmonyLib;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -23,6 +24,9 @@ namespace ScalerCore.Handlers
 
             // Visual
             internal Transform? AnimTarget;
+            // The enemy's own sole marker, when it has one and it rides the mesh (see
+            // VisualGrounding). Null means the grounding falls back to the renderers.
+            internal Transform? GroundMarker;
             internal Vector3 AnimOriginalScale;
             internal Vector3 AnimOriginalLocalPos;
             internal EnemyBombThrowerHead? BtHead;
@@ -136,6 +140,7 @@ namespace ScalerCore.Handlers
                 state.AnimOriginalScale    = state.AnimTarget.localScale;
                 state.AnimOriginalLocalPos = state.AnimTarget.localPosition;
             }
+            state.GroundMarker = FindGroundMarker(ep, state.AnimTarget);
             state.NavAgent  = ep.GetComponentInChildren<EnemyNavMeshAgent>();
             state.EnemyRb   = ctrl.GetComponent<EnemyRigidbody>();
 
@@ -170,6 +175,28 @@ namespace ScalerCore.Handlers
             Plugin.Log.LogDebug($"[SC]   visualHandler={state.VisualHandler.GetType().Name} for '{enemyName}'");
 
             ctrl.HandlerState = state;
+        }
+
+        // Four of the enemy scripts hand the game a transform sitting on their soles and
+        // navigate off it rather than off the body. They share no base class and the field is
+        // the only thing they have in common, so take it by name off whichever script the
+        // enemy runs. It is only worth having when it rides the mesh we scale; a marker
+        // parented anywhere else keeps its vanilla height on its own.
+        const string GroundMarkerField = "feetTransform";
+
+        static Transform? FindGroundMarker(EnemyParent ep, Transform? animTarget)
+        {
+            if (animTarget == null) return null;
+            var brain = ep.Enemy != null ? ep.Enemy.gameObject : ep.gameObject;
+            foreach (var mb in brain.GetComponents<MonoBehaviour>())
+            {
+                if (mb == null) continue;
+                var field = AccessTools.Field(mb.GetType(), GroundMarkerField);
+                if (field == null || field.FieldType != typeof(Transform)) continue;
+                var marker = field.GetValue(mb) as Transform;
+                if (marker != null && marker.IsChildOf(animTarget)) return marker;
+            }
+            return null;
         }
 
         /// <summary>

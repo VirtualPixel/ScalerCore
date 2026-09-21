@@ -21,6 +21,42 @@ namespace ScalerCore.Tests
         // mesh, because scaling toward a pivot above them lifted them by the same amount.
         static float Nudge(float ratio) => PivotToFeet * (ratio - 1f);
 
+        // Four enemies carry a transform at their soles and navigate off it: the agent is
+        // warped to it, the navmesh is sampled at it, and one of them writes its own position
+        // from it. The lowest rendered point is something else entirely, and grounding to the
+        // renderer leaves that transform off the floor by the difference times the growth,
+        // which is a grown enemy walking through the floor or above it.
+        [Fact]
+        public void TheGroundMarkerBeatsTheLowestRenderedPoint()
+        {
+            // Pivot a metre up, soles on the floor, and something on the model hanging 40cm
+            // lower than the soles.
+            float measured = GroundingTrack.PivotToFeet(
+                pivotY: 1f, lowestRenderedY: -0.4f, markerY: 0f, hasMarker: true, ratio: 1f);
+            Assert.Equal(1f, measured, 5);
+
+            // Doubled, the mesh scales about a pivot that stays put and the soles drop a metre.
+            // The lift has to be exactly that metre to put them back on the floor.
+            var track = new GroundingTrack();
+            Assert.Equal(1f, track.Next(0f, measured, 2f), 5);
+        }
+
+        [Fact]
+        public void WithoutAMarkerTheRenderersAreAllThereIs()
+        {
+            Assert.Equal(1.4f, GroundingTrack.PivotToFeet(
+                pivotY: 1f, lowestRenderedY: -0.4f, markerY: 0f, hasMarker: false, ratio: 1f), 5);
+        }
+
+        // The measurement is taken whenever the enemy is first scaled, so it has to read the
+        // same at any size.
+        [Fact]
+        public void MeasuringMidGrowthGivesTheFullSizeDistance()
+        {
+            Assert.Equal(1f, GroundingTrack.PivotToFeet(
+                pivotY: 2f, lowestRenderedY: -0.8f, markerY: 0f, hasMarker: true, ratio: 2f), 5);
+        }
+
         [Fact]
         public void RewritingOurOwnValueIsStable()
         {

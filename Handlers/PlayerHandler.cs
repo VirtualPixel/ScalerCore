@@ -1,4 +1,5 @@
 using Photon.Pun;
+using ScalerCore.Utilities;
 using UnityEngine;
 
 namespace ScalerCore.Handlers
@@ -562,7 +563,9 @@ namespace ScalerCore.Handlers
             }
             else Plugin.Log.LogWarning("[SC] PhysGrabber.instance null, grab range not scaled");
             float speedMult = Mathf.Lerp(1f, f, 0.5f);
-            PlayerController.instance?.OverrideSpeed(speedMult, 9999f);
+            if (PlayerController.instance != null)
+                GameCall.Invoke(PlayerController.instance, typeof(PlayerController),
+                    nameof(PlayerController.OverrideSpeed), speedMult, 9999f);
             // CameraBob advances its cycle by overrideSpeedMultiplier, and footsteps
             // fire when the cycle wraps, so the giant's speed boost made the bob AND
             // the steps faster. Big things take longer strides: counter the coupling
@@ -670,7 +673,9 @@ namespace ScalerCore.Handlers
                 PhysGrabber.instance.maxDistanceFromPlayer = state.OriginalGrabMaxDist;
                 PhysGrabber.instance.minDistanceFromPlayerOriginal = state.OriginalGrabMinDist;
             }
-            PlayerController.instance?.OverrideSpeed(1f, 0.1f);
+            if (PlayerController.instance != null)
+                GameCall.Invoke(PlayerController.instance, typeof(PlayerController),
+                    nameof(PlayerController.OverrideSpeed), 1f, 0.1f);
             if (state.BobAdjusted && CameraBob.Instance != null)
             {
                 CameraBob.Instance.bobUpLerpSpeed   = state.OriginalBobUpSpeed;
@@ -765,7 +770,8 @@ namespace ScalerCore.Handlers
             if (PostProcessing.Instance != null)
             {
                 var col = shrinking ? new Color(0.1f, 0.35f, 1f) : new Color(1f, 0.55f, 0.1f);
-                PostProcessing.Instance.VignetteOverride(col, 0.45f, 0.5f, 15f, 4f, 0.3f, ctrl.gameObject);
+                GameCall.Invoke(PostProcessing.Instance, typeof(PostProcessing),
+                    nameof(PostProcessing.VignetteOverride), col, 0.45f, 0.5f, 15f, 4f, 0.3f, ctrl.gameObject);
             }
         }
     }

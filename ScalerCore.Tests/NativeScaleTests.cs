@@ -22,6 +22,25 @@ namespace ScalerCore.Tests
         }
 
         [Fact]
+        public void TheRespawnFlagSurvivesTheWireAndAn106HostLeavesItOff()
+        {
+            var o = ScaleOptions.Growth;
+            o.KeepThroughRespawn = true;
+            var back = ScaleOptionsCodec.Unpack(ScaleOptionsCodec.PackFloats(o), ScaleOptionsCodec.PackBools(o), ScaleOptions.Default);
+            Assert.True(back.KeepThroughRespawn);
+
+            // The seven-flag array a 1.0.6 host sends: the slot is not there and must read false,
+            // never leave a monster stuck at boss size through every respawn of the level.
+            var old = ScaleOptionsCodec.Unpack(
+                ScaleOptionsCodec.PackFloats(o),
+                new[] { false, false, false, false, true, true, false },
+                ScaleOptions.Default);
+            Assert.True(old.IgnoreBonkExpand);
+            Assert.True(old.RejectExternalApply);
+            Assert.False(old.KeepThroughRespawn);
+        }
+
+        [Fact]
         public void AShortArrayFromAnOldHostStillReads()
         {
             var o = ScaleOptions.Default;
@@ -69,6 +88,16 @@ namespace ScalerCore.Tests
         {
             Assert.Null(RespawnRules.PathFromName("(Clone)", "Valuables"));
             Assert.Null(RespawnRules.PathFromName(null, "Valuables"));
+        }
+
+        // The whole point of the feature is that people without the mod see the right size, so
+        // it has to be on out of the box. A default flipped back to off would be silent.
+        [Fact]
+        public void TheRespawnIsOnOutOfTheBox()
+        {
+            Assert.True(RespawnRules.NativeSyncDefault);
+            Assert.Equal(RespawnRules.Verdict.Now,
+                RespawnRules.Decide(RespawnRules.NativeSyncDefault, true, true, true, true, true, false, false, false, true));
         }
 
         [Fact]

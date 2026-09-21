@@ -19,6 +19,23 @@ namespace ScalerCore.Handlers.EnemyVisuals
         float _lastWrittenY;
         bool  _wrote;
 
+        /// <summary>
+        /// Distance from the mesh pivot down to the ground, at full size, from what the pivot
+        /// and the ground read at a known ratio.
+        ///
+        /// The Chef, the Mentalist, Trudge and Elsa each carry a transform at their soles and
+        /// steer off it: the agent is warped to it, the navmesh is sampled at it, and the Chef
+        /// writes its own position from it. Take the ground from that transform when the enemy
+        /// has one. The lowest rendered point is whatever hangs furthest down on the model,
+        /// and grounding to it leaves the soles off the floor by the difference times the
+        /// growth, which the enemy then navigates from.
+        /// </summary>
+        internal static float PivotToFeet(float pivotY, float lowestRenderedY, float markerY, bool hasMarker, float ratio)
+        {
+            if (ratio <= 0f) return 0f;
+            return (pivotY - (hasMarker ? markerY : lowestRenderedY)) / ratio;
+        }
+
         /// <summary>The height at which the mesh should sit this frame.</summary>
         internal float Next(float currentY, float pivotToFeet, float ratio)
         {
