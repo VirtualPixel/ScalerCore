@@ -90,10 +90,10 @@ namespace ScalerCore.Tests
             Assert.Null(RespawnRules.PathFromName(null, "Valuables"));
         }
 
-        // The whole point of the feature is that people without the mod see the right size, so
-        // it has to be on out of the box. A default flipped back to off would be silent.
+        // Off until it has been played: a default that flipped on by itself would put every
+        // room on a path nobody has watched. The table below is what it does once switched on.
         [Fact]
-        public void TheRespawnIsOnOutOfTheBox()
+        public void TheRespawnShipsOff()
         {
             Assert.False(RespawnRules.NativeSyncDefault);
             Assert.Equal(RespawnRules.Verdict.Now,
