@@ -97,7 +97,7 @@ namespace ScalerCore.Tests
         {
             Assert.False(RespawnRules.NativeSyncDefault);
             Assert.Equal(RespawnRules.Verdict.Now,
-                RespawnRules.Decide(RespawnRules.NativeSyncDefault, true, true, true, true, true, false, false, false, true));
+                RespawnRules.Decide(true, true, true, true, true, true, false, false, false, true));
         }
 
         [Fact]
