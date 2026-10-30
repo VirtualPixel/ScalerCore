@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- New icon with a border. The code is the same as 1.1.0.
+
 ## 1.1.0
 
 - The native scale respawn (the path players without ScalerCore can see) ships off. Turn it on under Experimental to test it; it becomes the default once it has stood up in a real room.
@@ -19,7 +23,7 @@
 - Someone joining mid-run gets the sizes that were set before they arrived. The re-send used to hang off a callback on each scaled object, and Photon stops delivering callbacks to a component while it is switched off, which an enemy is between every spawn. The host now walks its own registry of live sessions from one place that is never switched off, and logs how many it sent.
 - Grown enemies stand on the floor again instead of walking through it or above it. The Chef, the Mentalist, Trudge and Elsa each carry a transform on their soles, and their own code navigates off it: the NavMesh agent is warped to it, the navmesh is sampled at it, and the Chef sets its own position from it. The grounding lift was measured to the lowest point the model renders instead, which is not the same place, so at double size the soles ended up off the floor by the whole difference and the enemy went wherever that put its navigation. Whether that reads as sunk or floating depends on which of the two sits lower on the model, which is why it was some monsters and not all of them. The lift now measures to the enemy's own marker when it has one and rides the mesh, and falls back to the renderers when it does not. It shows in the registration log line as `groundMarker=`.
 - Player speed and the screen vignette are looked up on the game build the mod is running on rather than the one it was compiled against, so a change to either signature cannot take the mod out for the session the way it did in 1.0.3.
-- The frame drop at the end of the map collapse. Hundreds of loose objects squeezed into a few metres were a contact-solver pile-up. The destroy queue now clears them by 60% of the collapse, whatever is left stops generating contacts at 80% (it still rides the shrink), and the level's own scale, which re-cooks every mesh collider on each write, is written every other frame.
+- The frame drop at the end of the map collapse. Hundreds of loose objects squeezed into a few meters were a contact-solver pile-up. The destroy queue now clears them by 60% of the collapse, whatever is left stops generating contacts at 80% (it still rides the shrink), and the level's own scale, which re-cooks every mesh collider on each write, is written every other frame.
 
 ### Internal
 - No API removals or signature changes. Mods built against 1.0.4, 1.0.5 or 1.0.6 need nothing. `ScaleOptions` gains one field and the shrink RPC one flag slot, both length-guarded on the wire in both directions.
